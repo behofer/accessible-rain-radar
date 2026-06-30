@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regen-Radar – barrierefrei (DWD)</title>
+<style>
+  :root {
+    --bg: #eef1f5; --panel: #ffffff; --ink: #14181f; --muted: #5a6473;
+    --line: #d4dae3; --accent: #1f6feb; --accent-soft: #e3edfd;
+    --focus: #1f6feb; --shadow: 0 1px 2px rgba(20,24,31,.06), 0 4px 16px rgba(20,24,31,.05);
+    --r1: #cfe0c0; --r2: #8ec3ec; --r3: #3a8fd6; --r4: #2056a8; --r5: #6a3fb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --panel: #161b22; --ink: #e8edf3; --muted: #8b95a4;
+      --line: #283040; --accent: #4d96ff; --accent-soft: #16263f;
+      --focus: #7db4ff; --shadow: none;
+      --r1: #46603a; --r2: #2f5f86; --r3: #2f78c0; --r4: #3a6fd0; --r5: #8a63d8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 24px 18px 64px; }
+  .skip { position: absolute; left: -9999px; top: 0; background: var(--accent); color: #fff; padding: 10px 14px; border-radius: 8px; z-index: 10; }
+  .skip:focus { left: 12px; top: 12px; }
+
+  header h1 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 4px; letter-spacing: -.01em; }
+  header p.sub { margin: 0 0 20px; color: var(--muted); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin: 0 0 18px; box-shadow: var(--shadow); }
+  .panel h2 { font-size: .82rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+
+  .controls { display: grid; gap: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 200px; }
+  label { font-size: .85rem; color: var(--muted); }
+  input[type=text] { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); min-width: 0; }
+  button { font: inherit; font-weight: 550; cursor: pointer; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover { border-color: var(--accent); }
+  .checkrow { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .88rem; }
+  .checkrow input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+  .readout { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 22px; margin: 0 0 18px; box-shadow: var(--shadow); }
+  .readout .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; margin: 0 0 8px; }
+  .readout .sentence { font-size: 1.32rem; line-height: 1.34; font-weight: 600; letter-spacing: -.012em; margin: 0; }
+  .readout .meta { margin: 12px 0 0; color: var(--muted); font: .8rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  table { width: 100%; border-collapse: collapse; }
+  caption { text-align: left; color: var(--muted); font-size: .82rem; margin-bottom: 8px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+  thead th { font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  tbody th { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; }
+  tr.now th, tr.now td { background: var(--accent-soft); }
+  .tag { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .l1 .dot { background: var(--r1); } .l2 .dot { background: var(--r2); }
+  .l3 .dot { background: var(--r3); } .l4 .dot { background: var(--r4); } .l5 .dot { background: var(--r5); }
+  .muted { color: var(--muted); }
+
+  .surround { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; }
+  @media (max-width: 520px) { .surround { grid-template-columns: 1fr; justify-items: center; } }
+  .compass { width: 140px; height: 140px; flex: none; }
+  .compass text { fill: var(--muted); font: 600 9px system-ui, sans-serif; }
+  .compass .ring { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .compass .tick { stroke: var(--line); stroke-width: 2; }
+  .compass .tick.on { stroke: var(--accent); stroke-width: 4; }
+  .compass .hub { fill: var(--line); }
+  .compass .hub.rain { fill: var(--accent); }
+  .compass .arrow { stroke: var(--accent); stroke-width: 2.5; fill: var(--accent); }
+
+  .err { color: #c0392b; font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .err { color: #ff8b7a; } }
+  footer { color: var(--muted); font-size: .82rem; margin-top: 8px; }
+  footer a { color: var(--accent); }
+
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+  @media (prefers-reduced-motion: no-preference) { .readout .sentence { transition: opacity .15s ease; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main" id="t-skip">Zum Hauptinhalt springen</a>
+<div class="wrap">
+
+  <header>
+    <h1 id="t-h1">Regen-Radar</h1>
+    <p class="sub" id="t-sub">Echtes DWD-Regenradar – als Klartext, Zeitverlauf und Himmelsrichtung.</p>
+  </header>
+
+  <main id="main">
+
+    <section class="panel" aria-labelledby="h-ort">
+      <h2 id="h-ort">Standort</h2>
+      <div class="controls">
+        <div class="row">
+          <div class="field">
+            <label for="ort" id="l-ort">Ort oder Adresse</label>
+            <input type="text" id="ort" autocomplete="off" placeholder="z. B. Fürth" value="Fürth">
+          </div>
+          <button id="btn-suche" type="button">Ort suchen</button>
+          <button id="btn-geo" type="button">Mein Standort</button>
+        </div>
+        <div class="row">
+          <button id="btn-update" class="primary" type="button">Radar aktualisieren</button>
+          <span class="checkrow">
+            <input type="checkbox" id="auto"><label for="auto" id="l-auto" style="color:inherit">Alle 5 Minuten automatisch</label>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="readout" aria-labelledby="h-klar">
+      <p class="label" id="h-klar">Klartext</p>
+      <p class="sentence" id="klartext" role="status" aria-live="polite" aria-atomic="true">Lade Radardaten …</p>
+      <p class="meta" id="meta" aria-hidden="true"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-hier">
+      <h2 id="h-hier">Verlauf hier</h2>
+      <table>
+        <caption id="cap-hier">Niederschlag an deinem Standort, direkt aus dem DWD-Radar (10-Minuten-Schritte, 5-Minuten-Basis).</caption>
+        <thead>
+          <tr><th scope="col" id="th-zeit">Zeit</th><th scope="col" id="th-nieder1">Niederschlag</th></tr>
+        </thead>
+        <tbody id="timeline"><tr><td colspan="2" class="muted">…</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="panel" aria-labelledby="h-um">
+      <h2 id="h-um">In der Umgebung</h2>
+      <div class="surround">
+        <table>
+          <caption id="cap-um">Aktuelle Radar-Echos je Himmelsrichtung, bis 50 km Entfernung.</caption>
+          <thead>
+            <tr><th scope="col" id="th-richtung">Richtung</th><th scope="col" id="th-nieder2">Niederschlag</th><th scope="col" id="th-entf">Ab Entfernung</th></tr>
+          </thead>
+          <tbody id="ring"><tr><td colspan="3" class="muted">…</td></tr></tbody>
+        </table>
+        <svg class="compass" id="compass" viewBox="0 0 100 100" aria-hidden="true" focusable="false"></svg>
+      </div>
+    </section>
+
+    <p id="error" class="err" role="alert" aria-live="assertive"></p>
+
+    <footer>
+      <p id="t-footer">Datenquelle: <a href="https://brightsky.dev" target="_blank" rel="noopener">Bright Sky</a> / DWD RV-Radarkomposit
+      (1 km², 5-Minuten-Schritte, 2-Stunden-Vorhersage). Abdeckung: Deutschland und Grenzregionen.
+      Radar ist eine Schätzung des bodennahen Niederschlags, keine exakte Messung.</p>
+    </footer>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   Radar-Nowcast – reine Logik (kein DOM)
+   Quelle: Bright Sky /radar  (DWD RV-Komposit)
+   Gitter: Zeile 0 = Norden, Spalte 0 = Westen, 1 px = 1 km
+   Werte:  0.01 mm / 5 min   -> mm/h = Wert * 0.12
+
+   Mehrsprachig (de/en): die Analyse-Logik ist sprachneutral und
+   bekommt über opts.L ein Locale-Objekt (Himmelsrichtungen,
+   Intensitätsstufen, Satz-Templates) hereingereicht.
+   ============================================================ */
+
+const V2MMH = 0.12;
+const RADAR_TH = 3;          // Wert >= 3  (~0.36 mm/h) gilt als Regen
+const round5 = (n) => Math.round(n / 5) * 5;
+
+const BEARINGS_DE = [
+  { name: 'Norden', adj: 'nördlich', short: 'N', deg: 0 },
+  { name: 'Nordosten', adj: 'nordöstlich', short: 'NO', deg: 45 },
+  { name: 'Osten', adj: 'östlich', short: 'O', deg: 90 },
+  { name: 'Südosten', adj: 'südöstlich', short: 'SO', deg: 135 },
+  { name: 'Süden', adj: 'südlich', short: 'S', deg: 180 },
+  { name: 'Südwesten', adj: 'südwestlich', short: 'SW', deg: 225 },
+  { name: 'Westen', adj: 'westlich', short: 'W', deg: 270 },
+  { name: 'Nordwesten', adj: 'nordwestlich', short: 'NW', deg: 315 },
+];
+const BEARINGS_EN = [
+  { name: 'North', adj: 'to the north', short: 'N', deg: 0 },
+  { name: 'Northeast', adj: 'to the northeast', short: 'NE', deg: 45 },
+  { name: 'East', adj: 'to the east', short: 'E', deg: 90 },
+  { name: 'Southeast', adj: 'to the southeast', short: 'SE', deg: 135 },
+  { name: 'South', adj: 'to the south', short: 'S', deg: 180 },
+  { name: 'Southwest', adj: 'to the southwest', short: 'SW', deg: 225 },
+  { name: 'West', adj: 'to the west', short: 'W', deg: 270 },
+  { name: 'Northwest', adj: 'to the northwest', short: 'NW', deg: 315 },
+];
+
+const LEVELS_DE = ['trocken', 'Nieseln', 'leichter Regen', 'mäßiger Regen', 'starker Regen', 'Starkregen'];
+const LEVELS_EN = ['dry', 'drizzle', 'light rain', 'moderate rain', 'heavy rain', 'torrential rain'];
+
+// Aliase für Rückwärtskompatibilität / Tests
+const BEARINGS = BEARINGS_DE;
+
+function classify(mmPerH, levels = LEVELS_DE) {
+  let lvl;
+  if (mmPerH < 0.1) lvl = 0;
+  else if (mmPerH < 0.5) lvl = 1;
+  else if (mmPerH < 2.5) lvl = 2;
+  else if (mmPerH < 10) lvl = 3;
+  else if (mmPerH < 25) lvl = 4;
+  else lvl = 5;
+  return { lvl, word: levels[lvl] };
+}
+
+const bearingOf = (dx, dy) => (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360; // 0=N, 90=O
+const sectorIdx = (brg) => Math.round(brg / 45) % 8;
+
+// 3x3-Maximum am Standortpixel (robuster als ein Einzelpixel)
+function centerValue(grid, r, c) {
+  let m = 0;
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    const rr = r + dr, cc = c + dc;
+    if (rr >= 0 && rr < grid.length && cc >= 0 && cc < grid[0].length) m = Math.max(m, grid[rr][cc]);
+  }
+  return m;
+}
+
+// Echos je Himmelsrichtung in EINEM Radarbild
+function computeSectors(grid, cr, cc, maxKm, bearings = BEARINGS_DE, levels = LEVELS_DE) {
+  const best = new Array(8).fill(null);
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r];
+    for (let c = 0; c < row.length; c++) {
+      const v = row[c];
+      if (v < RADAR_TH) continue;
+      const dx = c - cc, dy = cr - r, dist = Math.hypot(dx, dy);
+      if (dist < 2 || dist > maxKm) continue;
+      const si = sectorIdx(bearingOf(dx, dy));
+      if (!best[si] || dist < best[si].dist) best[si] = { dist: Math.round(dist), v };
+    }
+  }
+  const table = bearings.map((b, i) => best[i]
+    ? { bearing: b, rain: true, dist: best[i].dist, ...classify(best[i].v * V2MMH, levels) }
+    : { bearing: b, rain: false });
+  const active = table.filter((t) => t.rain)
+    .map((t) => ({ bearing: t.bearing, dist: t.dist, word: t.word, lvl: t.lvl }))
+    .sort((a, b) => a.dist - b.dist);
+  return { table, active };
+}
+
+// Niederschlagsgewichteter Schwerpunkt (nur nahe Echos)
+function centroid(grid, cr, cc, maxKm) {
+  let sw = 0, sr = 0, sc = 0;
+  for (let r = 0; r < grid.length; r++) for (let c = 0; c < grid[0].length; c++) {
+    const v = grid[r][c];
+    if (v < RADAR_TH) continue;
+    if (Math.hypot(c - cc, cr - r) > maxKm) continue;
+    sw += v; sr += v * r; sc += v * c;
+  }
+  return sw ? { row: sr / sw, col: sc / sw, mass: sw } : null;
+}
+
+// Zugbahn aus Versatz zweier beobachteter Bilder
+function estimateMotion(obs, cr, cc, maxKm, bearings = BEARINGS_DE) {
+  if (obs.length < 2) return null;
+  const fB = obs[obs.length - 1];
+  const fA = obs[Math.max(0, obs.length - 3)]; // ~10–15 min früher
+  if (fA.ms === fB.ms) return null;
+  const cA = centroid(fA.grid, cr, cc, maxKm), cB = centroid(fB.grid, cr, cc, maxKm);
+  if (!cA || !cB) return null;
+  const dxKm = cB.col - cA.col, dyKm = -(cB.row - cA.row); // Ost+, Nord+
+  const dtH = (fB.ms - fA.ms) / 3600000;
+  if (dtH <= 0) return null;
+  const speed = Math.hypot(dxKm, dyKm) / dtH;
+  if (speed < 2 || speed > 150) return null;
+  const toB = bearingOf(dxKm, dyKm), fromB = (toB + 180) % 360;
+  return { speed: round5(speed), fromName: bearings[sectorIdx(fromB)], toName: bearings[sectorIdx(toB)] };
+}
+
+function deriveApproach(center, sectors, motion, fallbackRain = 'Regen') {
+  if (center.rainingNow) return { mode: 'here', motion };
+  if (center.onsetMin != null) {
+    const nearest = sectors.active[0] || null;
+    if (!nearest && !motion) return { mode: 'forming', etaMin: center.onsetMin };
+    const bearing = motion ? motion.fromName : (nearest ? nearest.bearing : null);
+    const dist = nearest ? nearest.dist : null;
+    const word = (center.arriving && center.arriving.lvl > 0) ? center.arriving.word : (nearest ? nearest.word : fallbackRain);
+    let speed = motion ? motion.speed : null;
+    if (speed == null && dist != null && center.onsetMin > 0) {
+      const s = round5(dist / (center.onsetMin / 60));
+      if (s >= 3 && s <= 120) speed = s;
+    }
+    const confidence = (bearing && dist != null && center.onsetMin <= 90) ? 'high' : 'mid';
+    return { mode: 'approaching', bearing, dist, word, speed, etaMin: center.onsetMin, confidence };
+  }
+  if (sectors.active.length) {
+    const n = sectors.active[0];
+    return { mode: 'nearby_passing', bearing: n.bearing, dist: n.dist, word: n.word, motion };
+  }
+  return { mode: 'clear' };
+}
+
+/* ---- Satz-Templates je Sprache ------------------------------------------ */
+
+function headlineDE(center, approach, maxKm) {
+  switch (approach.mode) {
+    case 'here': {
+      const i = center.nowIntensity.word;
+      const dir = approach.motion ? ` Zieht Richtung ${approach.motion.toName.name}.` : '';
+      if (center.risingHere) return `Es regnet hier – ${i}, nimmt laut Radar noch zu.${dir}`;
+      if (center.endMin === -1) return `Es regnet hier – ${i}. Hält voraussichtlich die nächsten zwei Stunden an.${dir}`;
+      if (center.endMin != null) return `Es regnet hier – ${i}. Lässt voraussichtlich in etwa ${center.endMin} Minuten nach.${dir}`;
+      return `Es regnet hier – ${i}.${dir}`;
+    }
+    case 'approaching': {
+      const where = approach.dist != null ? ` (${approach.dist} km ${approach.bearing.adj})` : '';
+      const spd = approach.speed ? ` mit rund ${approach.speed} km/h` : '';
+      const conf = approach.confidence === 'mid' ? ' (noch unsicher)' : '';
+      return `Aktuell trocken. Aus ${approach.bearing.name} zieht ${approach.word} heran${where}${spd}` +
+        ` – hier voraussichtlich in etwa ${approach.etaMin} Minuten${conf}.`;
+    }
+    case 'forming':
+      return `Aktuell trocken. Niederschlag bildet sich laut Radar-Vorhersage in etwa ` +
+        `${approach.etaMin} Minuten direkt vor Ort – keine klare Zugrichtung erkennbar.`;
+    case 'nearby_passing': {
+      const mv = approach.motion ? `, zieht Richtung ${approach.motion.toName.name}` : '';
+      return `Hier trocken. Im Umkreis ${approach.word} ${approach.bearing.adj} ` +
+        `(${approach.dist} km)${mv} – erreicht dich laut Vorhersage aber nicht.`;
+    }
+    case 'clear':
+      return `Trocken – auch im Radar-Umkreis von ${maxKm} km ist aktuell kein Niederschlag.`;
+  }
+}
+
+function headlineEN(center, approach, maxKm) {
+  const low = (s) => s.toLowerCase();
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  switch (approach.mode) {
+    case 'here': {
+      const i = center.nowIntensity.word;
+      const dir = approach.motion ? ` Moving towards the ${low(approach.motion.toName.name)}.` : '';
+      if (center.risingHere) return `It's raining here – ${i}, still intensifying according to radar.${dir}`;
+      if (center.endMin === -1) return `It's raining here – ${i}. Likely to continue for the next two hours.${dir}`;
+      if (center.endMin != null) return `It's raining here – ${i}. Likely to ease off in about ${center.endMin} minutes.${dir}`;
+      return `It's raining here – ${i}.${dir}`;
+    }
+    case 'approaching': {
+      const where = approach.dist != null ? ` (${approach.dist} km ${approach.bearing.adj})` : '';
+      const spd = approach.speed ? ` at around ${approach.speed} km/h` : '';
+      const conf = approach.confidence === 'mid' ? ' (still uncertain)' : '';
+      return `Currently dry. ${cap(approach.word)} is moving in from the ${low(approach.bearing.name)}${where}${spd}` +
+        ` – expected here in about ${approach.etaMin} minutes${conf}.`;
+    }
+    case 'forming':
+      return `Currently dry. Radar forecast shows precipitation forming right here in about ` +
+        `${approach.etaMin} minutes – no clear direction of movement.`;
+    case 'nearby_passing': {
+      const mv = approach.motion ? `, moving towards the ${low(approach.motion.toName.name)}` : '';
+      return `Dry here. Nearby ${low(approach.word)} ${approach.bearing.adj} ` +
+        `(${approach.dist} km)${mv} – but not forecast to reach you.`;
+    }
+    case 'clear':
+      return `Dry – no precipitation within the ${maxKm} km radar range either.`;
+  }
+}
+
+/* ---- Locale-Bundles ----------------------------------------------------- */
+
+const I18N = {
+  de: {
+    lang: 'de', locale: 'de-DE', geoLang: 'de',
+    bearings: BEARINGS_DE, levels: LEVELS_DE, headline: headlineDE, fallbackRain: 'Regen',
+    clear: 'frei', noFrames: 'Keine Radardaten erhalten.',
+    // statische UI
+    title: 'Regen-Radar – barrierefrei (DWD)',
+    skip: 'Zum Hauptinhalt springen',
+    h1: 'Regen-Radar',
+    sub: 'Echtes DWD-Regenradar – als Klartext, Zeitverlauf und Himmelsrichtung.',
+    hOrt: 'Standort',
+    lOrt: 'Ort oder Adresse',
+    placeholder: 'z. B. Fürth',
+    btnSearch: 'Ort suchen',
+    btnGeo: 'Mein Standort',
+    btnUpdate: 'Radar aktualisieren',
+    lAuto: 'Alle 5 Minuten automatisch',
+    hKlar: 'Klartext',
+    loading: 'Lade Radardaten …',
+    hHier: 'Verlauf hier',
+    capHier: 'Niederschlag an deinem Standort, direkt aus dem DWD-Radar (10-Minuten-Schritte, 5-Minuten-Basis).',
+    thZeit: 'Zeit', thNieder: 'Niederschlag',
+    hUm: 'In der Umgebung',
+    capUm: 'Aktuelle Radar-Echos je Himmelsrichtung, bis 50 km Entfernung.',
+    thRichtung: 'Richtung', thEntf: 'Ab Entfernung',
+    footerPre: 'Datenquelle: ',
+    footerPost: ' / DWD RV-Radarkomposit (1 km², 5-Minuten-Schritte, 2-Stunden-Vorhersage). ' +
+      'Abdeckung: Deutschland und Grenzregionen. Radar ist eine Schätzung des bodennahen Niederschlags, keine exakte Messung.',
+    noHistory: 'Keine Verlaufsdaten.',
+    nowSuffix: '(jetzt)',
+    metaRadar: 'Radarstand',
+    // Status / Fehler
+    updating: 'Aktualisiere Radardaten …',
+    loadFail: 'Radardaten konnten nicht geladen werden.',
+    checkConn: ' Prüfe die Internetverbindung und versuche es erneut.',
+    searchFail: 'Ortssuche fehlgeschlagen.',
+    noLocation: (n) => `Kein Ort gefunden für „${n}".`,
+    radarUnreach: (s) => `Radardaten nicht erreichbar (Fehler ${s}).`,
+    noRadar: 'Für diesen Standort/Zeitraum liegen keine Radardaten vor.',
+    enterLocation: 'Bitte einen Ort eingeben.',
+    searching: (n) => `Suche „${n}" …`,
+    notFound: 'Ort nicht gefunden.',
+    myLocation: 'Mein Standort',
+    geoUnsupportedStatus: 'Standortbestimmung nicht möglich.',
+    geoUnsupported: 'Dieser Browser unterstützt keine Standortbestimmung. Gib stattdessen einen Ort ein.',
+    geoInsecureStatus: 'Standortbestimmung blockiert.',
+    geoInsecure: 'Die Standortbestimmung funktioniert nur über HTTPS oder localhost. Die Seite läuft gerade über „file://" und wird vom Browser als unsicher behandelt. Nutze „Ort suchen" oder öffne die Datei über einen lokalen Server (z. B. python3 -m http.server, dann http://localhost:8000/).',
+    geoDetermining: 'Ermittle deinen Standort …',
+    geoDenied: 'Standortfreigabe wurde abgelehnt. Erlaube den Zugriff in den Browser-Einstellungen oder gib einen Ort ein.',
+    geoTimeout: 'Zeitüberschreitung bei der Standortbestimmung. Versuche es noch einmal.',
+    geoUnavailable: 'Standort momentan nicht verfügbar. Gib stattdessen einen Ort ein.',
+    geoUnavailableStatus: 'Standort nicht verfügbar.',
+  },
+  en: {
+    lang: 'en', locale: 'en-GB', geoLang: 'en',
+    bearings: BEARINGS_EN, levels: LEVELS_EN, headline: headlineEN, fallbackRain: 'rain',
+    clear: 'clear', noFrames: 'No radar data received.',
+    title: 'Rain Radar – accessible (DWD)',
+    skip: 'Skip to main content',
+    h1: 'Rain Radar',
+    sub: 'Real DWD rain radar – as plain text, timeline and compass direction.',
+    hOrt: 'Location',
+    lOrt: 'Town or address',
+    placeholder: 'e.g. Fürth',
+    btnSearch: 'Search location',
+    btnGeo: 'My location',
+    btnUpdate: 'Update radar',
+    lAuto: 'Automatically every 5 minutes',
+    hKlar: 'Plain text',
+    loading: 'Loading radar data …',
+    hHier: 'History here',
+    capHier: 'Precipitation at your location, straight from the DWD radar (10-minute steps, 5-minute base).',
+    thZeit: 'Time', thNieder: 'Precipitation',
+    hUm: 'In the area',
+    capUm: 'Current radar echoes per compass direction, up to 50 km away.',
+    thRichtung: 'Direction', thEntf: 'From distance',
+    footerPre: 'Data source: ',
+    footerPost: ' / DWD RV radar composite (1 km², 5-minute steps, 2-hour forecast). ' +
+      'Coverage: Germany and bordering regions. Radar is an estimate of near-surface precipitation, not an exact measurement.',
+    noHistory: 'No history data.',
+    nowSuffix: '(now)',
+    metaRadar: 'Radar as of',
+    updating: 'Updating radar data …',
+    loadFail: 'Radar data could not be loaded.',
+    checkConn: ' Check your internet connection and try again.',
+    searchFail: 'Location search failed.',
+    noLocation: (n) => `No location found for "${n}".`,
+    radarUnreach: (s) => `Radar data unreachable (error ${s}).`,
+    noRadar: 'No radar data available for this location/time.',
+    enterLocation: 'Please enter a location.',
+    searching: (n) => `Searching "${n}" …`,
+    notFound: 'Location not found.',
+    myLocation: 'My location',
+    geoUnsupportedStatus: 'Location detection not possible.',
+    geoUnsupported: 'This browser does not support location detection. Enter a location instead.',
+    geoInsecureStatus: 'Location detection blocked.',
+    geoInsecure: 'Location detection only works over HTTPS or localhost. The page is currently running via "file://" and is treated as insecure by the browser. Use "Search location" or open the file via a local server (e.g. python3 -m http.server, then http://localhost:8000/).',
+    geoDetermining: 'Determining your location …',
+    geoDenied: 'Location access was denied. Allow access in your browser settings or enter a location.',
+    geoTimeout: 'Location detection timed out. Try again.',
+    geoUnavailable: 'Location currently unavailable. Enter a location instead.',
+    geoUnavailableStatus: 'Location unavailable.',
+  },
+};
+
+// Hauptfunktion: Bright-Sky-Radar-JSON -> vollständige Analyse
+function analyzeRadar(json, nowMs, opts = {}) {
+  const maxKm = opts.maxKm || 50, motionKm = opts.motionKm || 40;
+  const L = opts.L || I18N.de;
+  let frames = (json.radar || [])
+    .map((r) => ({ ms: Date.parse(r.timestamp), label: r.timestamp.slice(11, 16), grid: r.precipitation_5 }))
+    .filter((f) => Array.isArray(f.grid) && f.grid.length && Number.isFinite(f.ms))
+    .sort((a, b) => a.ms - b.ms);
+  if (!frames.length) throw new Error(L.noFrames);
+
+  const rows = frames[0].grid.length, cols = frames[0].grid[0].length;
+  let cRow, cCol;
+  const p = json.latlon_position;
+  if (p) { const x = Array.isArray(p) ? p[0] : p.x, y = Array.isArray(p) ? p[1] : p.y;
+    cCol = Math.round(x); cRow = Math.round(y); }
+  if (!Number.isFinite(cRow) || !Number.isFinite(cCol)) { cRow = (rows - 1) >> 1; cCol = (cols - 1) >> 1; }
+  cRow = Math.min(Math.max(cRow, 0), rows - 1);
+  cCol = Math.min(Math.max(cCol, 0), cols - 1);
+
+  let curIdx = 0;
+  for (let i = 0; i < frames.length; i++) { if (frames[i].ms <= nowMs) curIdx = i; else break; }
+
+  const series = frames.map((f) => centerValue(f.grid, cRow, cCol));
+  const rainingNow = series[curIdx] >= RADAR_TH;
+  const nowIntensity = classify(series[curIdx] * V2MMH, L.levels);
+  const horizonMs = nowMs + 125 * 60000;
+  let onsetMin = null, endMin = null;
+  if (!rainingNow) {
+    for (let j = curIdx + 1; j < frames.length && frames[j].ms <= horizonMs; j++)
+      if (series[j] >= RADAR_TH) { onsetMin = round5((frames[j].ms - nowMs) / 60000); break; }
+  } else {
+    let found = false;
+    for (let j = curIdx + 1; j < frames.length && frames[j].ms <= horizonMs; j++)
+      if (series[j] < RADAR_TH) { endMin = round5((frames[j].ms - nowMs) / 60000); found = true; break; }
+    if (!found) endMin = -1;
+  }
+
+  const timeline = [];
+  for (let j = curIdx; j < frames.length && frames[j].ms <= nowMs + 120 * 60000; j += 2) {
+    const v = series[j];
+    timeline.push({ time: frames[j].label, mmH: v * V2MMH, now: j === curIdx, ...classify(v * V2MMH, L.levels) });
+  }
+
+  // Intensität, die laut Vorhersage tatsächlich ankommt (nicht die schwache Vorderkante)
+  let arriving = nowIntensity;
+  if (!rainingNow && onsetMin != null) {
+    let onsetIdx = -1;
+    for (let j = curIdx + 1; j < frames.length; j++) if (series[j] >= RADAR_TH) { onsetIdx = j; break; }
+    if (onsetIdx >= 0) {
+      const lim = frames[onsetIdx].ms + 30 * 60000;
+      let pk = 0;
+      for (let j = onsetIdx; j < frames.length && frames[j].ms <= lim; j++) pk = Math.max(pk, series[j]);
+      arriving = classify(pk * V2MMH, L.levels);
+    }
+  }
+  // Nimmt laufender Regen noch zu?
+  let risingHere = false;
+  if (rainingNow) {
+    let pk = series[curIdx];
+    for (let j = curIdx + 1; j < frames.length && frames[j].ms <= nowMs + 45 * 60000; j++) pk = Math.max(pk, series[j]);
+    risingHere = classify(pk * V2MMH, L.levels).lvl > nowIntensity.lvl;
+  }
+
+  const sectors = computeSectors(frames[curIdx].grid, cRow, cCol, maxKm, L.bearings, L.levels);
+  const motion = estimateMotion(frames.filter((f) => f.ms <= nowMs), cRow, cCol, motionKm, L.bearings);
+  const center = { rainingNow, nowIntensity, onsetMin, endMin, arriving, risingHere };
+  const approach = deriveApproach(center, sectors, motion, L.fallbackRain);
+
+  return {
+    cRow, cCol, rows, cols, curIdx, updated: frames[curIdx].label, frameCount: frames.length,
+    ...center, timeline, sectors, motion, approach,
+    headline: L.headline({ ...center, nowIntensity }, approach, maxKm),
+  };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { analyzeRadar, classify, BEARINGS, RADAR_TH, V2MMH, I18N };
+}
+
+/* ============================================================
+   App / DOM
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+
+// Sprache aus dem Browser bestimmen: en -> Englisch, sonst Deutsch (Standard).
+function pickLang() {
+  const cands = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'de']);
+  for (const c of cands) {
+    const code = String(c).toLowerCase();
+    if (code.startsWith('en')) return 'en';
+    if (code.startsWith('de')) return 'de';
+  }
+  return 'de';
+}
+const LANG = pickLang();
+const L = I18N[LANG];
+
+const fmt1 = (n) => n.toLocaleString(L.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmt3 = (n) => n.toLocaleString(L.locale, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const DIST_M = 50000; // Radar-Radius um den Standort (50 km)
+
+let state = { lat: 49.4783, lon: 10.9903, label: 'Fürth' };
+let autoTimer = null;
+
+const setStatus = (t) => { $('klartext').textContent = t; };
+const setError = (t) => { $('error').textContent = t || ''; };
+
+// Statische Oberfläche in der gewählten Sprache befüllen
+function applyStaticI18n() {
+  document.documentElement.lang = L.lang;
+  document.title = L.title;
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+  set('t-skip', L.skip);
+  set('t-h1', L.h1);
+  set('t-sub', L.sub);
+  set('h-ort', L.hOrt);
+  set('l-ort', L.lOrt);
+  $('ort').placeholder = L.placeholder;
+  set('btn-suche', L.btnSearch);
+  set('btn-geo', L.btnGeo);
+  set('btn-update', L.btnUpdate);
+  set('l-auto', L.lAuto);
+  set('h-klar', L.hKlar);
+  set('klartext', L.loading);
+  set('h-hier', L.hHier);
+  set('cap-hier', L.capHier);
+  set('th-zeit', L.thZeit);
+  set('th-nieder1', L.thNieder);
+  set('h-um', L.hUm);
+  set('cap-um', L.capUm);
+  set('th-richtung', L.thRichtung);
+  set('th-nieder2', L.thNieder);
+  set('th-entf', L.thEntf);
+  const f = $('t-footer');
+  if (f) f.innerHTML = `${L.footerPre}<a href="https://brightsky.dev" target="_blank" rel="noopener">Bright Sky</a>${L.footerPost}`;
+}
+
+async function geocode(name) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=${L.geoLang}&format=json`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(L.searchFail);
+  const j = await r.json();
+  if (!j.results || !j.results.length) throw new Error(L.noLocation(name));
+  const g = j.results[0];
+  return { lat: g.latitude, lon: g.longitude, label: [g.name, g.admin1].filter(Boolean).join(', ') };
+}
+
+async function fetchRadar(lat, lon) {
+  const date = new Date(Date.now() - 15 * 60000).toISOString();
+  const last = new Date(Date.now() + 125 * 60000).toISOString();
+  const url = `https://api.brightsky.dev/radar?lat=${lat}&lon=${lon}&distance=${DIST_M}`
+    + `&format=plain&tz=Europe/Berlin&date=${encodeURIComponent(date)}&last_date=${encodeURIComponent(last)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(L.radarUnreach(r.status));
+  const j = await r.json();
+  if (!j.radar || !j.radar.length) throw new Error(L.noRadar);
+  return j;
+}
+
+function renderTimeline(timeline) {
+  const tb = $('timeline'); tb.innerHTML = '';
+  if (!timeline.length) { tb.innerHTML = `<tr><td colspan="2" class="muted">${L.noHistory}</td></tr>`; return; }
+  timeline.forEach((s) => {
+    const tr = document.createElement('tr');
+    if (s.now) tr.className = 'now';
+    const time = s.now ? `${s.time} ${L.nowSuffix}` : s.time;
+    const rain = s.lvl === 0
+      ? `<span class="tag muted"><span class="dot"></span>${s.word}</span>`
+      : `<span class="tag l${s.lvl}"><span class="dot"></span>${s.word} (${fmt1(s.mmH)} mm/h)</span>`;
+    tr.innerHTML = `<th scope="row">${time}</th><td>${rain}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function renderRing(sectors) {
+  const tb = $('ring'); tb.innerHTML = '';
+  sectors.table.forEach((row) => {
+    const tr = document.createElement('tr');
+    const dir = `${row.bearing.name} (${row.bearing.short})`;
+    let rain, dist;
+    if (row.rain) {
+      rain = `<span class="tag l${row.lvl}"><span class="dot"></span>${row.word} (${fmt1(row.mmH)} mm/h)</span>`;
+      dist = `${row.dist} km`;
+    } else { rain = `<span class="tag muted"><span class="dot"></span>${L.clear}</span>`; dist = '–'; }
+    tr.innerHTML = `<th scope="row">${dir}</th><td>${rain}</td><td class="num">${dist}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function renderCompass(sectors, approach, motion, rainingHere) {
+  const svg = $('compass'); const cx = 50, cy = 50, rr = 37;
+  let h = `<circle class="ring" cx="${cx}" cy="${cy}" r="${rr}"></circle>`;
+  const fromShort = (approach.mode === 'approaching' || approach.mode === 'nearby_passing') && approach.bearing ? approach.bearing.short : null;
+  for (const b of L.bearings) {
+    const a = (b.deg - 90) * Math.PI / 180;
+    const x1 = cx + Math.cos(a) * (rr - 9), y1 = cy + Math.sin(a) * (rr - 9);
+    const x2 = cx + Math.cos(a) * rr, y2 = cy + Math.sin(a) * rr;
+    const on = sectors.table.find((t) => t.bearing.short === b.short && t.rain) || b.short === fromShort;
+    h += `<line class="tick ${on ? 'on' : ''}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"></line>`;
+    const lx = cx + Math.cos(a) * (rr + 7), ly = cy + Math.sin(a) * (rr + 7) + 3;
+    h += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle">${b.short}</text>`;
+  }
+  // Zugbahn-Pfeil (Richtung, in die der Regen zieht)
+  if (motion) {
+    const a = (motion.toName.deg - 90) * Math.PI / 180;
+    const ex = cx + Math.cos(a) * (rr - 13), ey = cy + Math.sin(a) * (rr - 13);
+    const ax = cx + Math.cos(a) * (rr - 5), ay = cy + Math.sin(a) * (rr - 5);
+    const pa = a + 2.6, pb = a - 2.6;
+    h += `<line class="arrow" x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"></line>`;
+    h += `<polygon class="arrow" points="${ax.toFixed(1)},${ay.toFixed(1)} `
+      + `${(ex + Math.cos(pa) * 5).toFixed(1)},${(ey + Math.sin(pa) * 5).toFixed(1)} `
+      + `${(ex + Math.cos(pb) * 5).toFixed(1)},${(ey + Math.sin(pb) * 5).toFixed(1)}"></polygon>`;
+  }
+  h += `<circle class="hub ${rainingHere ? 'rain' : ''}" cx="${cx}" cy="${cy}" r="5"></circle>`;
+  svg.innerHTML = h;
+}
+
+async function update() {
+  setError('');
+  setStatus(L.updating);
+  try {
+    const json = await fetchRadar(state.lat, state.lon);
+    const res = analyzeRadar(json, Date.now(), { maxKm: DIST_M / 1000, L });
+    setStatus(res.headline);
+    $('meta').textContent = `${L.metaRadar} ${res.updated} · ${state.label} · ${fmt3(state.lat)} / ${fmt3(state.lon)} · DWD RV`;
+    renderTimeline(res.timeline);
+    renderRing(res.sectors);
+    renderCompass(res.sectors, res.approach, res.motion, res.rainingNow);
+  } catch (e) {
+    setStatus(L.loadFail);
+    setError(e.message + L.checkConn);
+  }
+}
+
+$('btn-update').addEventListener('click', update);
+
+$('btn-suche').addEventListener('click', async () => {
+  const name = $('ort').value.trim();
+  if (!name) { setError(L.enterLocation); return; }
+  setError(''); setStatus(L.searching(name));
+  try { const g = await geocode(name); state = g; $('ort').value = g.label; await update(); }
+  catch (e) { setStatus(L.notFound); setError(e.message); }
+});
+
+$('btn-geo').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    setStatus(L.geoUnsupportedStatus);
+    setError(L.geoUnsupported);
+    return;
+  }
+  if (!window.isSecureContext) {
+    setStatus(L.geoInsecureStatus);
+    setError(L.geoInsecure);
+    return;
+  }
+  setError(''); setStatus(L.geoDetermining);
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      state = { lat: pos.coords.latitude, lon: pos.coords.longitude, label: L.myLocation };
+      $('ort').value = L.myLocation;
+      await update();
+    },
+    (err) => {
+      const msg = err.code === 1 ? L.geoDenied
+        : err.code === 3 ? L.geoTimeout
+        : L.geoUnavailable;
+      setStatus(L.geoUnavailableStatus); setError(msg);
+    },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+  );
+});
+
+$('auto').addEventListener('change', (e) => {
+  if (e.target.checked) autoTimer = setInterval(update, 5 * 60 * 1000);
+  else { clearInterval(autoTimer); autoTimer = null; }
+});
+
+$('ort').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('btn-suche').click(); } });
+
+applyStaticI18n();
+update();
+</script>
+</body>
+</html>

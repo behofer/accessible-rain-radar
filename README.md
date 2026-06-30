@@ -1,0 +1,79 @@
+# Accessible Rain Radar
+
+A 100% screen-reader-accessible rain radar (rain nowcast) for Germany, built as a **single, dependency-free HTML file**. It turns the DWD radar composite into **plain language**, a **timeline** and a **compass view** — no map image required, fully usable with a screen reader and keyboard.
+
+The interface language is detected automatically from the browser: **English** for `en-*` locales, **German** for everything else.
+
+[Live data source: Bright Sky](https://brightsky.dev) · DWD RV radar composite
+
+---
+
+## Features
+
+- **Plain-text nowcast** — a single spoken-friendly sentence such as
+  _"Currently dry. Moderate rain is moving in from the west (15 km to the west) at around 15 km/h – expected here in about 70 minutes."_
+- **Timeline table** — precipitation at your location in 10-minute steps, 2 hours ahead.
+- **Surroundings table + compass** — radar echoes per compass direction up to 50 km, with an estimated direction of movement.
+- **Accessibility first** — semantic HTML, ARIA live regions (`role="status"` / `role="alert"`), a skip link, proper table headers, visible focus styles, `prefers-color-scheme` (light/dark) and `prefers-reduced-motion` support.
+- **Bilingual (de/en)** — automatic browser-language detection; all UI text, plain-text sentences, compass directions and intensity levels are localized.
+- **Location input** — search by town/address (Open-Meteo geocoding) or use the device geolocation.
+- **No build step, no dependencies, no tracking.** One static `.html` file.
+
+## Data source
+
+[Bright Sky](https://brightsky.dev) serves the **DWD RV radar composite**: 1 km² grid, 5-minute steps, 2-hour forecast. Coverage is **Germany and bordering regions**. Radar is an estimate of near-surface precipitation, not an exact measurement.
+
+Geocoding (town → coordinates) uses the [Open-Meteo geocoding API](https://open-meteo.com/en/docs/geocoding-api).
+
+## Run locally
+
+It is a single static file. Open `regen-radar.html` directly in a browser, or — recommended, because **geolocation requires a secure context (HTTPS or `localhost`)** — serve it locally:
+
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000/regen-radar.html
+```
+
+> Opening via `file://` works, but the "My location" button is blocked by the browser. "Search location" works either way.
+
+## Deploy with Caddy
+
+Caddy serves static files and provisions HTTPS automatically. Put `regen-radar.html` into a web root (renaming it to `index.html` is convenient) and point a Caddyfile at it.
+
+```bash
+# on the server
+sudo mkdir -p /var/www/rain-radar
+sudo cp regen-radar.html /var/www/rain-radar/index.html
+```
+
+**Caddyfile** (`/etc/caddy/Caddyfile`):
+
+```caddy
+radar.example.com {
+    root * /var/www/rain-radar
+    file_server
+    encode gzip
+}
+```
+
+Then:
+
+```bash
+sudo systemctl reload caddy
+```
+
+Caddy obtains and renews a Let's Encrypt certificate automatically (DNS for `radar.example.com` must point at the server, ports 80 and 443 open). HTTPS also means the geolocation button works in production.
+
+For a quick local preview without DNS:
+
+```bash
+caddy file-server --root /var/www/rain-radar --listen :8080
+```
+
+## Browser language
+
+Detection order: the first entry in `navigator.languages` that starts with `en` → English, that starts with `de` → German; otherwise German is the default. To force a language for testing, change your browser's preferred language and reload.
+
+## License
+
+MIT — see below. Data © Deutscher Wetterdienst (DWD), delivered via Bright Sky.
