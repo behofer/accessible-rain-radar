@@ -27,23 +27,23 @@ Geocoding (town → coordinates) uses the [Open-Meteo geocoding API](https://ope
 
 ## Run locally
 
-It is a single static file. Open `regen-radar.html` directly in a browser, or — recommended, because **geolocation requires a secure context (HTTPS or `localhost`)** — serve it locally:
+It is a single static file. Open `index.html` directly in a browser, or — recommended, because **geolocation requires a secure context (HTTPS or `localhost`)** — serve it locally:
 
 ```bash
 python3 -m http.server 8000
-# then open http://localhost:8000/regen-radar.html
+# then open http://localhost:8000/
 ```
 
 > Opening via `file://` works, but the "My location" button is blocked by the browser. "Search location" works either way.
 
 ## Deploy with Caddy
 
-Caddy serves static files and provisions HTTPS automatically. Put `regen-radar.html` into a web root (renaming it to `index.html` is convenient) and point a Caddyfile at it.
+Caddy serves static files and provisions HTTPS automatically. Put `index.html` into a web root and point a Caddyfile at it.
 
 ```bash
 # on the server
 sudo mkdir -p /var/www/rain-radar
-sudo cp regen-radar.html /var/www/rain-radar/index.html
+sudo cp index.html /var/www/rain-radar/index.html
 ```
 
 **Caddyfile** (`/etc/caddy/Caddyfile`):

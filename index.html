@@ -238,7 +238,7 @@ function computeSectors(grid, cr, cc, maxKm, bearings = BEARINGS_DE, levels = LE
     }
   }
   const table = bearings.map((b, i) => best[i]
-    ? { bearing: b, rain: true, dist: best[i].dist, ...classify(best[i].v * V2MMH, levels) }
+    ? { bearing: b, rain: true, dist: best[i].dist, mmH: best[i].v * V2MMH, ...classify(best[i].v * V2MMH, levels) }
     : { bearing: b, rain: false });
   const active = table.filter((t) => t.rain)
     .map((t) => ({ bearing: t.bearing, dist: t.dist, word: t.word, lvl: t.lvl }))
