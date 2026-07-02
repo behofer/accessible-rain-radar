@@ -64,6 +64,13 @@
   .wx { display: inline-flex; align-items: center; gap: 7px; }
   .wx-icon { font-size: 1.1em; line-height: 1; }
 
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 0 0 18px; }
+  .seg [role=radio] { border: none; border-radius: 0; background: var(--panel); color: var(--muted); padding: 8px 18px; font-weight: 600; }
+  .seg [role=radio] + [role=radio] { border-left: 1px solid var(--line); }
+  .seg [role=radio]:hover { color: var(--ink); }
+  .seg [role=radio][aria-checked=true] { background: var(--accent); color: #fff; }
+  .seg [role=radio][aria-checked=true]:hover { color: #fff; }
+
   .readout { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 22px; margin: 0 0 18px; box-shadow: var(--shadow); }
   .readout .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; margin: 0 0 8px; }
   .readout .sentence { font-size: 1.32rem; line-height: 1.34; font-weight: 600; letter-spacing: -.012em; margin: 0; }
@@ -188,7 +195,12 @@
         <p class="meta" id="fc-meta" aria-hidden="true"></p>
       </section>
 
-      <section class="panel" aria-labelledby="h-fc-hourly">
+      <div class="seg" role="radiogroup" id="fc-view" aria-label="Vorhersage-Ansicht">
+        <button role="radio" id="fc-view-hourly" type="button" aria-checked="true">Stündlich</button>
+        <button role="radio" id="fc-view-daily" type="button" aria-checked="false" tabindex="-1">5 Tage</button>
+      </div>
+
+      <section class="panel" id="fc-sec-hourly" aria-labelledby="h-fc-hourly">
         <h2 id="h-fc-hourly">Stündlich</h2>
         <table>
           <caption id="cap-fc-hourly">Wettervorhersage Stunde für Stunde für die nächsten 24 Stunden.</caption>
@@ -206,10 +218,10 @@
         </table>
       </section>
 
-      <section class="panel" aria-labelledby="h-fc-daily">
+      <section class="panel" id="fc-sec-daily" aria-labelledby="h-fc-daily" hidden>
         <h2 id="h-fc-daily">Nächste Tage</h2>
         <table>
-          <caption id="cap-fc-daily">7-Tage-Vorhersage mit Höchst- und Tiefstwerten.</caption>
+          <caption id="cap-fc-daily">5-Tage-Vorhersage mit Höchst- und Tiefstwerten.</caption>
           <thead>
             <tr>
               <th scope="col" id="fd-tag">Tag</th>
@@ -516,10 +528,13 @@ const I18N = {
     fcLoading: 'Lade Vorhersage …',
     fcFail: 'Wettervorhersage konnte nicht geladen werden.',
     metaForecast: 'Stand',
+    fcViewLabel: 'Vorhersage-Ansicht',
+    fcViewHourly: 'Stündlich',
+    fcViewDaily: '5 Tage',
     hFcHourly: 'Stündlich',
     capFcHourly: 'Wettervorhersage Stunde für Stunde für die nächsten 24 Stunden.',
     hFcDaily: 'Nächste Tage',
-    capFcDaily: '7-Tage-Vorhersage mit Höchst- und Tiefstwerten.',
+    capFcDaily: '5-Tage-Vorhersage mit Höchst- und Tiefstwerten.',
     fhZeit: 'Zeit', fhWetter: 'Wetter', fhTemp: 'Temp.', fhRegen: 'Regen', fhWind: 'Wind', fhWolken: 'Bewölkung',
     fdTag: 'Tag', fdTemp: 'Max / Min', fdSonne: 'Sonne',
     today: 'Heute', tomorrow: 'Morgen',
@@ -591,10 +606,13 @@ const I18N = {
     fcLoading: 'Loading forecast …',
     fcFail: 'Weather forecast could not be loaded.',
     metaForecast: 'As of',
+    fcViewLabel: 'Forecast view',
+    fcViewHourly: 'Hourly',
+    fcViewDaily: '5 days',
     hFcHourly: 'Hourly',
     capFcHourly: 'Hour-by-hour weather forecast for the next 24 hours.',
     hFcDaily: 'Coming days',
-    capFcDaily: '7-day forecast with highs and lows.',
+    capFcDaily: '5-day forecast with highs and lows.',
     fhZeit: 'Time', fhWetter: 'Weather', fhTemp: 'Temp.', fhRegen: 'Rain', fhWind: 'Wind', fhWolken: 'Cloud',
     fdTag: 'Day', fdTemp: 'High / Low', fdSonne: 'Sun',
     today: 'Today', tomorrow: 'Tomorrow',
@@ -738,6 +756,7 @@ const DIST_M = 50000; // Radar-Radius um den Standort (50 km)
 let state = { lat: 49.4783, lon: 10.9903, label: 'Fürth' };
 let autoTimer = null;
 let activeTab = 'tab-radar';
+let fcView = 'hourly'; // 'hourly' | 'daily' – Umschalter im Vorhersage-Tab
 let forecast = { key: null, ts: 0 }; // Cache-Schlüssel + Zeitstempel der geladenen Vorhersage
 
 const setStatus = (t) => { $('klartext').textContent = t; };
@@ -776,6 +795,9 @@ function applyStaticI18n() {
   // Wettervorhersage-Tab
   set('h-fc-now', L.fcNowLabel);
   set('fc-now', L.fcLoading);
+  $('fc-view').setAttribute('aria-label', L.fcViewLabel);
+  set('fc-view-hourly', L.fcViewHourly);
+  set('fc-view-daily', L.fcViewDaily);
   set('h-fc-hourly', L.hFcHourly);
   set('cap-fc-hourly', L.capFcHourly);
   set('fh-zeit', L.fhZeit);
@@ -944,7 +966,7 @@ async function fetchForecast(lat, lon) {
     + '&current=weather_code,temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation'
     + '&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,cloud_cover,wind_speed_10m,wind_direction_10m'
     + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset'
-    + '&timezone=auto&forecast_days=7';
+    + '&timezone=auto&forecast_days=5';
   const r = await fetch(url);
   if (!r.ok) throw new Error(L.fcFail);
   return r.json();
@@ -1186,6 +1208,35 @@ TABS.forEach((tab, i) => {
     else if (e.key === 'Home') ni = 0;
     else if (e.key === 'End') ni = TABS.length - 1;
     if (ni != null) { e.preventDefault(); selectTab(TABS[ni].id, true); }
+  });
+});
+
+/* ---- Umschalter Stündlich / 5 Tage (WAI-ARIA Radiogroup) ---------------- */
+const FC_VIEWS = [
+  { view: 'hourly', radio: $('fc-view-hourly'), section: $('fc-sec-hourly') },
+  { view: 'daily', radio: $('fc-view-daily'), section: $('fc-sec-daily') },
+];
+
+function selectFcView(view, focus) {
+  fcView = view;
+  FC_VIEWS.forEach((v) => {
+    const on = v.view === view;
+    v.radio.setAttribute('aria-checked', on ? 'true' : 'false');
+    v.radio.tabIndex = on ? 0 : -1;
+    v.section.hidden = !on;
+    if (on && focus) v.radio.focus();
+  });
+}
+
+FC_VIEWS.forEach((v, i) => {
+  v.radio.addEventListener('click', () => selectFcView(v.view, false));
+  v.radio.addEventListener('keydown', (e) => {
+    let ni = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') ni = (i + 1) % FC_VIEWS.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ni = (i - 1 + FC_VIEWS.length) % FC_VIEWS.length;
+    else if (e.key === 'Home') ni = 0;
+    else if (e.key === 'End') ni = FC_VIEWS.length - 1;
+    if (ni != null) { e.preventDefault(); selectFcView(FC_VIEWS[ni].view, true); }
   });
 });
 
