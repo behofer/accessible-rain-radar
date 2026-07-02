@@ -1,6 +1,6 @@
 # Accessible Rain Radar
 
-A 100% screen-reader-accessible rain radar (rain nowcast) for Germany, built as a **single, dependency-free HTML file**. It turns the DWD radar composite into **plain language**, a **timeline** and a **compass view** — no map image required, fully usable with a screen reader and keyboard.
+A 100% screen-reader-accessible rain radar (rain nowcast) **with weather forecast** for Germany, built as a **single, dependency-free HTML file**. It turns the DWD radar composite into **plain language**, a **timeline** and a **compass view** — no map image required, fully usable with a screen reader and keyboard — and adds an hourly and 7-day **weather forecast** for the same location.
 
 The interface language is detected automatically from the browser: **English** for `en-*` locales, **German** for everything else.
 
@@ -14,16 +14,19 @@ The interface language is detected automatically from the browser: **English** f
   _"Currently dry. Moderate rain is moving in from the west (15 km to the west) at around 15 km/h – expected here in about 70 minutes."_
 - **Timeline table** — precipitation at your location in 10-minute steps, 2 hours ahead.
 - **Surroundings table + compass** — radar echoes per compass direction up to 50 km, with an estimated direction of movement.
+- **Weather forecast tab** — for the selected location: a "now" summary plus an **hourly (24 h)** and **daily (7-day)** table with weather, temperature, rain, wind and cloud cover. Switch between _Rain radar_ and _Weather forecast_ with an accessible tab widget (arrow-key navigable).
 - **Accessibility first** — semantic HTML, ARIA live regions (`role="status"` / `role="alert"`), a skip link, proper table headers, visible focus styles, `prefers-color-scheme` (light/dark) and `prefers-reduced-motion` support.
 - **Bilingual (de/en)** — automatic browser-language detection; all UI text, plain-text sentences, compass directions and intensity levels are localized.
-- **Location input** — search by town/address (Open-Meteo geocoding) or use the device geolocation.
+- **Location input** — search by town, address or postcode (Photon / OpenStreetMap geocoding, with a pick-list when several places match) or use the device geolocation (reverse-geocoded to a readable place name).
 - **No build step, no dependencies, no tracking.** One static `.html` file.
 
 ## Data source
 
 [Bright Sky](https://brightsky.dev) serves the **DWD RV radar composite**: 1 km² grid, 5-minute steps, 2-hour forecast. Coverage is **Germany and bordering regions**. Radar is an estimate of near-surface precipitation, not an exact measurement.
 
-Geocoding (town → coordinates) uses the [Open-Meteo geocoding API](https://open-meteo.com/en/docs/geocoding-api).
+The weather forecast (hourly and daily) uses the [Open-Meteo](https://open-meteo.com) API.
+
+Geocoding (place/address → coordinates, and reverse) uses [Photon](https://photon.komoot.io) (OpenStreetMap data).
 
 ## Run locally
 

@@ -45,6 +45,24 @@
   button:hover { border-color: var(--accent); }
   .checkrow { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .88rem; }
   .checkrow input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .hint { margin: -4px 0 0; color: var(--muted); font-size: .8rem; }
+
+  .results { margin: 4px 0 0; }
+  .results-head { margin: 0 0 8px; color: var(--muted); font-size: .85rem; }
+  .results-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .result { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; }
+  .result-main { font-weight: 600; }
+  .result-ctx { font-size: .82rem; color: var(--muted); }
+  .result:hover, .result:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+
+  .tabs { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--line); }
+  [role=tab] { border: none; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; background: none; color: var(--muted); padding: 10px 16px; font-weight: 600; margin-bottom: -1px; }
+  [role=tab][aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+  [role=tab]:hover { color: var(--ink); border-bottom-color: var(--line); }
+  [role=tab][aria-selected=true]:hover { border-bottom-color: var(--accent); }
+  [role=tabpanel]:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+  .wx { display: inline-flex; align-items: center; gap: 7px; }
+  .wx-icon { font-size: 1.1em; line-height: 1; }
 
   .readout { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--accent); border-radius: 14px; padding: 20px 22px; margin: 0 0 18px; box-shadow: var(--shadow); }
   .readout .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; margin: 0 0 8px; }
@@ -100,12 +118,13 @@
       <div class="controls">
         <div class="row">
           <div class="field">
-            <label for="ort" id="l-ort">Ort oder Adresse</label>
-            <input type="text" id="ort" autocomplete="off" placeholder="z. B. Fürth" value="Fürth">
+            <label for="ort" id="l-ort">Ort, Adresse oder PLZ</label>
+            <input type="text" id="ort" autocomplete="off" placeholder="z. B. Fürth" value="Fürth" aria-describedby="ort-hint">
           </div>
           <button id="btn-suche" type="button">Ort suchen</button>
           <button id="btn-geo" type="button">Mein Standort</button>
         </div>
+        <p id="ort-hint" class="hint"></p>
         <div class="row">
           <button id="btn-update" class="primary" type="button">Radar aktualisieren</button>
           <span class="checkrow">
@@ -113,7 +132,20 @@
           </span>
         </div>
       </div>
+      <div id="results" class="results" role="region" tabindex="-1" hidden aria-labelledby="results-head">
+        <p id="results-head" class="results-head"></p>
+        <ul id="results-list" class="results-list"></ul>
+      </div>
     </section>
+
+    <div class="tabs" role="tablist" id="tablist" aria-label="Ansicht">
+      <button role="tab" id="tab-radar" type="button" aria-selected="true" aria-controls="panel-radar">Regenradar</button>
+      <button role="tab" id="tab-forecast" type="button" aria-selected="false" aria-controls="panel-forecast" tabindex="-1">Wettervorhersage</button>
+    </div>
+
+    <p id="error" class="err" role="alert" aria-live="assertive"></p>
+
+    <div role="tabpanel" id="panel-radar" aria-labelledby="tab-radar" tabindex="0">
 
     <section class="readout" aria-labelledby="h-klar">
       <p class="label" id="h-klar">Klartext</p>
@@ -146,12 +178,57 @@
       </div>
     </section>
 
-    <p id="error" class="err" role="alert" aria-live="assertive"></p>
+    </div><!-- /panel-radar -->
+
+    <div role="tabpanel" id="panel-forecast" aria-labelledby="tab-forecast" tabindex="0" hidden>
+
+      <section class="readout" aria-labelledby="h-fc-now">
+        <p class="label" id="h-fc-now">Jetzt</p>
+        <p class="sentence" id="fc-now" role="status" aria-live="polite" aria-atomic="true">Lade Vorhersage …</p>
+        <p class="meta" id="fc-meta" aria-hidden="true"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-fc-hourly">
+        <h2 id="h-fc-hourly">Stündlich</h2>
+        <table>
+          <caption id="cap-fc-hourly">Wettervorhersage Stunde für Stunde für die nächsten 24 Stunden.</caption>
+          <thead>
+            <tr>
+              <th scope="col" id="fh-zeit">Zeit</th>
+              <th scope="col" id="fh-wetter">Wetter</th>
+              <th scope="col" id="fh-temp">Temp.</th>
+              <th scope="col" id="fh-regen">Regen</th>
+              <th scope="col" id="fh-wind">Wind</th>
+              <th scope="col" id="fh-wolken">Bewölkung</th>
+            </tr>
+          </thead>
+          <tbody id="fc-hourly"><tr><td colspan="6" class="muted">…</td></tr></tbody>
+        </table>
+      </section>
+
+      <section class="panel" aria-labelledby="h-fc-daily">
+        <h2 id="h-fc-daily">Nächste Tage</h2>
+        <table>
+          <caption id="cap-fc-daily">7-Tage-Vorhersage mit Höchst- und Tiefstwerten.</caption>
+          <thead>
+            <tr>
+              <th scope="col" id="fd-tag">Tag</th>
+              <th scope="col" id="fd-wetter">Wetter</th>
+              <th scope="col" id="fd-temp">Max / Min</th>
+              <th scope="col" id="fd-regen">Regen</th>
+              <th scope="col" id="fd-wind">Wind</th>
+              <th scope="col" id="fd-sonne">Sonne</th>
+            </tr>
+          </thead>
+          <tbody id="fc-daily"><tr><td colspan="6" class="muted">…</td></tr></tbody>
+        </table>
+      </section>
+
+    </div><!-- /panel-forecast -->
 
     <footer>
-      <p id="t-footer">Datenquelle: <a href="https://brightsky.dev" target="_blank" rel="noopener">Bright Sky</a> / DWD RV-Radarkomposit
-      (1 km², 5-Minuten-Schritte, 2-Stunden-Vorhersage). Abdeckung: Deutschland und Grenzregionen.
-      Radar ist eine Schätzung des bodennahen Niederschlags, keine exakte Messung.</p>
+      <p id="t-footer"></p>
+      <p id="t-copyright"></p>
     </footer>
   </main>
 </div>
@@ -198,6 +275,46 @@ const LEVELS_EN = ['dry', 'drizzle', 'light rain', 'moderate rain', 'heavy rain'
 
 // Aliase für Rückwärtskompatibilität / Tests
 const BEARINGS = BEARINGS_DE;
+
+// WMO-Wettercodes (Open-Meteo) -> Klartext je Sprache
+const WMO_DE = {
+  0: 'klar', 1: 'überwiegend klar', 2: 'teils bewölkt', 3: 'bedeckt',
+  45: 'Nebel', 48: 'Reifnebel',
+  51: 'leichter Nieselregen', 53: 'Nieselregen', 55: 'starker Nieselregen',
+  56: 'gefrierender Niesel', 57: 'starker gefrierender Niesel',
+  61: 'leichter Regen', 63: 'Regen', 65: 'starker Regen',
+  66: 'gefrierender Regen', 67: 'starker gefrierender Regen',
+  71: 'leichter Schneefall', 73: 'Schneefall', 75: 'starker Schneefall', 77: 'Schneegriesel',
+  80: 'leichte Regenschauer', 81: 'Regenschauer', 82: 'heftige Regenschauer',
+  85: 'leichte Schneeschauer', 86: 'Schneeschauer',
+  95: 'Gewitter', 96: 'Gewitter mit Hagel', 99: 'Gewitter mit schwerem Hagel',
+};
+const WMO_EN = {
+  0: 'clear', 1: 'mainly clear', 2: 'partly cloudy', 3: 'overcast',
+  45: 'fog', 48: 'rime fog',
+  51: 'light drizzle', 53: 'drizzle', 55: 'dense drizzle',
+  56: 'freezing drizzle', 57: 'dense freezing drizzle',
+  61: 'light rain', 63: 'rain', 65: 'heavy rain',
+  66: 'freezing rain', 67: 'heavy freezing rain',
+  71: 'light snow', 73: 'snow', 75: 'heavy snow', 77: 'snow grains',
+  80: 'light rain showers', 81: 'rain showers', 82: 'violent rain showers',
+  85: 'light snow showers', 86: 'snow showers',
+  95: 'thunderstorm', 96: 'thunderstorm with hail', 99: 'thunderstorm with heavy hail',
+};
+// Emoji nur zur Optik (aria-hidden) – der Klartext trägt die Bedeutung.
+function wmoIcon(c) {
+  if (c === 0) return '☀️';
+  if (c === 1) return '🌤️';
+  if (c === 2) return '⛅';
+  if (c === 3) return '☁️';
+  if (c === 45 || c === 48) return '🌫️';
+  if (c >= 51 && c <= 57) return '🌦️';
+  if (c >= 61 && c <= 67) return '🌧️';
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return '🌨️';
+  if (c >= 80 && c <= 82) return '🌦️';
+  if (c >= 95) return '⛈️';
+  return '•';
+}
 
 function classify(mmPerH, levels = LEVELS_DE) {
   let lvl;
@@ -373,13 +490,17 @@ const I18N = {
     title: 'Regen-Radar – barrierefrei (DWD)',
     skip: 'Zum Hauptinhalt springen',
     h1: 'Regen-Radar',
-    sub: 'Echtes DWD-Regenradar – als Klartext, Zeitverlauf und Himmelsrichtung.',
+    sub: 'Echtes DWD-Regenradar mit Wettervorhersage – als Klartext, Zeitverlauf und Himmelsrichtung.',
+    tabsLabel: 'Ansicht',
+    tabRadar: 'Regenradar',
+    tabForecast: 'Wettervorhersage',
     hOrt: 'Standort',
-    lOrt: 'Ort oder Adresse',
-    placeholder: 'z. B. Fürth',
+    lOrt: 'Ort, Adresse oder PLZ',
+    placeholder: 'z. B. Fürth oder Marienplatz, München',
+    ortHint: 'Ort, Straße mit Hausnummer oder Postleitzahl – dann „Ort suchen".',
     btnSearch: 'Ort suchen',
     btnGeo: 'Mein Standort',
-    btnUpdate: 'Radar aktualisieren',
+    btnUpdate: 'Aktualisieren',
     lAuto: 'Alle 5 Minuten automatisch',
     hKlar: 'Klartext',
     loading: 'Lade Radardaten …',
@@ -389,9 +510,28 @@ const I18N = {
     hUm: 'In der Umgebung',
     capUm: 'Aktuelle Radar-Echos je Himmelsrichtung, bis 50 km Entfernung.',
     thRichtung: 'Richtung', thEntf: 'Ab Entfernung',
-    footerPre: 'Datenquelle: ',
-    footerPost: ' / DWD RV-Radarkomposit (1 km², 5-Minuten-Schritte, 2-Stunden-Vorhersage). ' +
-      'Abdeckung: Deutschland und Grenzregionen. Radar ist eine Schätzung des bodennahen Niederschlags, keine exakte Messung.',
+    // Wettervorhersage
+    wmo: WMO_DE, windFrom: 'aus',
+    fcNowLabel: 'Jetzt',
+    fcLoading: 'Lade Vorhersage …',
+    fcFail: 'Wettervorhersage konnte nicht geladen werden.',
+    metaForecast: 'Stand',
+    hFcHourly: 'Stündlich',
+    capFcHourly: 'Wettervorhersage Stunde für Stunde für die nächsten 24 Stunden.',
+    hFcDaily: 'Nächste Tage',
+    capFcDaily: '7-Tage-Vorhersage mit Höchst- und Tiefstwerten.',
+    fhZeit: 'Zeit', fhWetter: 'Wetter', fhTemp: 'Temp.', fhRegen: 'Regen', fhWind: 'Wind', fhWolken: 'Bewölkung',
+    fdTag: 'Tag', fdTemp: 'Max / Min', fdSonne: 'Sonne',
+    today: 'Heute', tomorrow: 'Morgen',
+    // Fußzeile
+    footerRadar: 'Datenquellen – Regenradar: ',
+    footerVia: ' / DWD RV-Komposit. ',
+    footerForecastLbl: 'Wettervorhersage: ',
+    footerForecastVia: '. ',
+    footerGeoLbl: 'Ortssuche: ',
+    footerGeoVia: ' (OpenStreetMap). ',
+    footerDisclaimer: 'Radar und Vorhersage sind Schätzungen, keine amtlichen Wetterwarnungen.',
+    copyright: '© 2026 Benjamin Hofer · Frei und quelloffen (MIT-Lizenz) · barrierefrei, ohne Tracking, ohne Anmeldung.',
     noHistory: 'Keine Verlaufsdaten.',
     nowSuffix: '(jetzt)',
     metaRadar: 'Radarstand',
@@ -400,12 +540,13 @@ const I18N = {
     loadFail: 'Radardaten konnten nicht geladen werden.',
     checkConn: ' Prüfe die Internetverbindung und versuche es erneut.',
     searchFail: 'Ortssuche fehlgeschlagen.',
-    noLocation: (n) => `Kein Ort gefunden für „${n}".`,
+    noLocation: (n) => `Kein Treffer für „${n}". Versuche einen Nachbarort, eine genauere Adresse oder die Postleitzahl.`,
+    multiStatus: (n) => `${n} Treffer gefunden.`,
+    resultsHead: (n, q) => `${n} Treffer für „${q}" – bitte auswählen:`,
     radarUnreach: (s) => `Radardaten nicht erreichbar (Fehler ${s}).`,
     noRadar: 'Für diesen Standort/Zeitraum liegen keine Radardaten vor.',
     enterLocation: 'Bitte einen Ort eingeben.',
     searching: (n) => `Suche „${n}" …`,
-    notFound: 'Ort nicht gefunden.',
     myLocation: 'Mein Standort',
     geoUnsupportedStatus: 'Standortbestimmung nicht möglich.',
     geoUnsupported: 'Dieser Browser unterstützt keine Standortbestimmung. Gib stattdessen einen Ort ein.',
@@ -424,13 +565,17 @@ const I18N = {
     title: 'Rain Radar – accessible (DWD)',
     skip: 'Skip to main content',
     h1: 'Rain Radar',
-    sub: 'Real DWD rain radar – as plain text, timeline and compass direction.',
+    sub: 'Real DWD rain radar with weather forecast – as plain text, timeline and compass direction.',
+    tabsLabel: 'View',
+    tabRadar: 'Rain radar',
+    tabForecast: 'Weather forecast',
     hOrt: 'Location',
-    lOrt: 'Town or address',
-    placeholder: 'e.g. Fürth',
+    lOrt: 'Town, address or postcode',
+    placeholder: 'e.g. Fürth or Marienplatz, Munich',
+    ortHint: 'Town, street with house number or postcode – then "Search location".',
     btnSearch: 'Search location',
     btnGeo: 'My location',
-    btnUpdate: 'Update radar',
+    btnUpdate: 'Update',
     lAuto: 'Automatically every 5 minutes',
     hKlar: 'Plain text',
     loading: 'Loading radar data …',
@@ -440,9 +585,28 @@ const I18N = {
     hUm: 'In the area',
     capUm: 'Current radar echoes per compass direction, up to 50 km away.',
     thRichtung: 'Direction', thEntf: 'From distance',
-    footerPre: 'Data source: ',
-    footerPost: ' / DWD RV radar composite (1 km², 5-minute steps, 2-hour forecast). ' +
-      'Coverage: Germany and bordering regions. Radar is an estimate of near-surface precipitation, not an exact measurement.',
+    // Weather forecast
+    wmo: WMO_EN, windFrom: 'from',
+    fcNowLabel: 'Now',
+    fcLoading: 'Loading forecast …',
+    fcFail: 'Weather forecast could not be loaded.',
+    metaForecast: 'As of',
+    hFcHourly: 'Hourly',
+    capFcHourly: 'Hour-by-hour weather forecast for the next 24 hours.',
+    hFcDaily: 'Coming days',
+    capFcDaily: '7-day forecast with highs and lows.',
+    fhZeit: 'Time', fhWetter: 'Weather', fhTemp: 'Temp.', fhRegen: 'Rain', fhWind: 'Wind', fhWolken: 'Cloud',
+    fdTag: 'Day', fdTemp: 'High / Low', fdSonne: 'Sun',
+    today: 'Today', tomorrow: 'Tomorrow',
+    // Footer
+    footerRadar: 'Data sources – rain radar: ',
+    footerVia: ' / DWD RV composite. ',
+    footerForecastLbl: 'Weather forecast: ',
+    footerForecastVia: '. ',
+    footerGeoLbl: 'Location search: ',
+    footerGeoVia: ' (OpenStreetMap). ',
+    footerDisclaimer: 'Radar and forecast are estimates, not official weather warnings.',
+    copyright: '© 2026 Benjamin Hofer · Free and open source (MIT licence) · accessible, no tracking, no sign-up.',
     noHistory: 'No history data.',
     nowSuffix: '(now)',
     metaRadar: 'Radar as of',
@@ -450,12 +614,13 @@ const I18N = {
     loadFail: 'Radar data could not be loaded.',
     checkConn: ' Check your internet connection and try again.',
     searchFail: 'Location search failed.',
-    noLocation: (n) => `No location found for "${n}".`,
+    noLocation: (n) => `No match for "${n}". Try a nearby town, a more precise address or the postcode.`,
+    multiStatus: (n) => `${n} matches found.`,
+    resultsHead: (n, q) => `${n} matches for "${q}" – please choose:`,
     radarUnreach: (s) => `Radar data unreachable (error ${s}).`,
     noRadar: 'No radar data available for this location/time.',
     enterLocation: 'Please enter a location.',
     searching: (n) => `Searching "${n}" …`,
-    notFound: 'Location not found.',
     myLocation: 'My location',
     geoUnsupportedStatus: 'Location detection not possible.',
     geoUnsupported: 'This browser does not support location detection. Enter a location instead.',
@@ -572,6 +737,8 @@ const DIST_M = 50000; // Radar-Radius um den Standort (50 km)
 
 let state = { lat: 49.4783, lon: 10.9903, label: 'Fürth' };
 let autoTimer = null;
+let activeTab = 'tab-radar';
+let forecast = { key: null, ts: 0 }; // Cache-Schlüssel + Zeitstempel der geladenen Vorhersage
 
 const setStatus = (t) => { $('klartext').textContent = t; };
 const setError = (t) => { $('error').textContent = t || ''; };
@@ -584,9 +751,13 @@ function applyStaticI18n() {
   set('t-skip', L.skip);
   set('t-h1', L.h1);
   set('t-sub', L.sub);
+  $('tablist').setAttribute('aria-label', L.tabsLabel);
+  set('tab-radar', L.tabRadar);
+  set('tab-forecast', L.tabForecast);
   set('h-ort', L.hOrt);
   set('l-ort', L.lOrt);
   $('ort').placeholder = L.placeholder;
+  set('ort-hint', L.ortHint);
   set('btn-suche', L.btnSearch);
   set('btn-geo', L.btnGeo);
   set('btn-update', L.btnUpdate);
@@ -602,18 +773,81 @@ function applyStaticI18n() {
   set('th-richtung', L.thRichtung);
   set('th-nieder2', L.thNieder);
   set('th-entf', L.thEntf);
+  // Wettervorhersage-Tab
+  set('h-fc-now', L.fcNowLabel);
+  set('fc-now', L.fcLoading);
+  set('h-fc-hourly', L.hFcHourly);
+  set('cap-fc-hourly', L.capFcHourly);
+  set('fh-zeit', L.fhZeit);
+  set('fh-wetter', L.fhWetter);
+  set('fh-temp', L.fhTemp);
+  set('fh-regen', L.fhRegen);
+  set('fh-wind', L.fhWind);
+  set('fh-wolken', L.fhWolken);
+  set('h-fc-daily', L.hFcDaily);
+  set('cap-fc-daily', L.capFcDaily);
+  set('fd-tag', L.fdTag);
+  set('fd-wetter', L.fhWetter);
+  set('fd-temp', L.fdTemp);
+  set('fd-regen', L.fhRegen);
+  set('fd-wind', L.fhWind);
+  set('fd-sonne', L.fdSonne);
+  // Fußzeile: Datenquellen + Copyright
+  const link = (href, label) => `<a href="${href}" target="_blank" rel="noopener">${label}</a>`;
   const f = $('t-footer');
-  if (f) f.innerHTML = `${L.footerPre}<a href="https://brightsky.dev" target="_blank" rel="noopener">Bright Sky</a>${L.footerPost}`;
+  if (f) f.innerHTML = L.footerRadar + link('https://brightsky.dev', 'Bright Sky') + L.footerVia
+    + L.footerForecastLbl + link('https://open-meteo.com', 'Open-Meteo') + L.footerForecastVia
+    + L.footerGeoLbl + link('https://photon.komoot.io', 'Photon') + L.footerGeoVia
+    + L.footerDisclaimer;
+  set('t-copyright', L.copyright);
 }
 
+// Aus den Photon-Eigenschaften einen lesbaren Ort/Adress-Text bauen.
+// main = die markante Zeile, context = Ort/Region zur Unterscheidung von Namensvettern.
+function labelFromProps(p) {
+  p = p || {};
+  const street = [p.street, p.housenumber].filter(Boolean).join(' ');
+  const locality = p.city || p.town || p.village || p.municipality || p.county || '';
+  const main = p.name || street || locality || p.state || p.country || '?';
+  const parts = [];
+  if (locality && locality !== main) parts.push(locality);
+  if (p.state && p.state !== main && p.state !== locality) parts.push(p.state);
+  if (p.country && p.country !== main && p.country !== 'Deutschland' && p.country !== 'Germany') parts.push(p.country);
+  const context = parts.join(', ');
+  return { main, context, label: context ? `${main}, ${context}` : main };
+}
+
+// Photon-Geocoder (OpenStreetMap): versteht Orte, Adressen und Postleitzahlen,
+// liefert mehrere Kandidaten. Ergebnisse werden nach Standort in der Nähe gewichtet.
 async function geocode(name) {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=${L.geoLang}&format=json`;
+  const bias = Number.isFinite(state.lat) && Number.isFinite(state.lon) ? `&lat=${state.lat}&lon=${state.lon}` : '';
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(name)}&limit=6&lang=${L.geoLang}${bias}`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(L.searchFail);
   const j = await r.json();
-  if (!j.results || !j.results.length) throw new Error(L.noLocation(name));
-  const g = j.results[0];
-  return { lat: g.latitude, lon: g.longitude, label: [g.name, g.admin1].filter(Boolean).join(', ') };
+  const seen = new Set();
+  const out = [];
+  for (const f of (j.features || [])) {
+    const c = f.geometry && f.geometry.coordinates;
+    if (!c) continue;
+    const lon = c[0], lat = c[1];
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const key = `${lat.toFixed(3)},${lon.toFixed(3)}`; // ~100 m: identische Adresse/POI-Häufung zusammenfassen
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ lat, lon, ...labelFromProps(f.properties) });
+  }
+  return out;
+}
+
+// Koordinaten -> Ortsname (Komfort für „Mein Standort"); Fehler sind unkritisch.
+async function reverseGeocode(lat, lon) {
+  const url = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&lang=${L.geoLang}`;
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const j = await r.json();
+  const f = (j.features || [])[0];
+  return f ? labelFromProps(f.properties).label : null;
 }
 
 async function fetchRadar(lat, lon) {
@@ -686,6 +920,112 @@ function renderCompass(sectors, approach, motion, rainingHere) {
   svg.innerHTML = h;
 }
 
+/* ---- Wettervorhersage (Open-Meteo) -------------------------------------- */
+
+const weatherInfo = (code) => ({ text: L.wmo[code] || '—', icon: wmoIcon(code) });
+const dirShort = (deg) => L.bearings[Math.round((((deg % 360) + 360) % 360) / 45) % 8].short;
+const wxTag = (info) => `<span class="wx"><span class="wx-icon" aria-hidden="true">${info.icon}</span>${info.text}</span>`;
+
+function fcNowSentence(cur) {
+  const w = weatherInfo(cur.weather_code).text;
+  const parts = [
+    w,
+    `${Math.round(cur.temperature_2m)} °C`,
+    `${L.fhWind} ${Math.round(cur.wind_speed_10m)} km/h ${L.windFrom} ${dirShort(cur.wind_direction_10m)}`,
+    `${cur.cloud_cover} % ${L.fhWolken}`,
+  ];
+  if (cur.precipitation > 0) parts.push(`${fmt1(cur.precipitation)} mm`);
+  return parts.join(' · ');
+}
+
+async function fetchForecast(lat, lon) {
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + `?latitude=${lat}&longitude=${lon}`
+    + '&current=weather_code,temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation'
+    + '&hourly=weather_code,temperature_2m,precipitation,precipitation_probability,cloud_cover,wind_speed_10m,wind_direction_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset'
+    + '&timezone=auto&forecast_days=7';
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(L.fcFail);
+  return r.json();
+}
+
+function renderHourly(h, curTime) {
+  const tb = $('fc-hourly'); tb.innerHTML = '';
+  const t = h.time;
+  let start = t.findIndex((x) => x >= curTime);
+  if (start === -1) start = t.length - 1;
+  if (start > 0 && t[start] > curTime) start -= 1; // laufende Stunde mitnehmen
+  const end = Math.min(start + 24, t.length);
+  for (let i = start; i < end; i++) {
+    const tr = document.createElement('tr');
+    const now = i === start;
+    if (now) tr.className = 'now';
+    const time = t[i].slice(11, 16) + (now ? ` ${L.nowSuffix}` : '');
+    const prob = h.precipitation_probability[i], pr = h.precipitation[i];
+    const regen = `${prob == null ? 0 : prob} %` + (pr > 0 ? ` · ${fmt1(pr)} mm` : '');
+    tr.innerHTML = `<th scope="row">${time}</th>`
+      + `<td>${wxTag(weatherInfo(h.weather_code[i]))}</td>`
+      + `<td class="num">${Math.round(h.temperature_2m[i])} °C</td>`
+      + `<td class="num">${regen}</td>`
+      + `<td class="num">${Math.round(h.wind_speed_10m[i])} km/h ${L.windFrom} ${dirShort(h.wind_direction_10m[i])}</td>`
+      + `<td class="num">${h.cloud_cover[i]} %</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+function dayLabel(dateStr, i) {
+  if (i === 0) return L.today;
+  if (i === 1) return L.tomorrow;
+  const wd = new Date(dateStr).toLocaleDateString(L.locale, { weekday: 'long' });
+  return wd.charAt(0).toUpperCase() + wd.slice(1);
+}
+
+function renderDaily(d) {
+  const tb = $('fc-daily'); tb.innerHTML = '';
+  for (let i = 0; i < d.time.length; i++) {
+    const tr = document.createElement('tr');
+    const prob = d.precipitation_probability_max[i], sum = d.precipitation_sum[i];
+    const regen = (sum > 0 ? `${fmt1(sum)} mm · ` : '') + `${prob == null ? 0 : prob} %`;
+    const sun = `${d.sunrise[i].slice(11, 16)}–${d.sunset[i].slice(11, 16)}`;
+    tr.innerHTML = `<th scope="row">${dayLabel(d.time[i], i)}</th>`
+      + `<td>${wxTag(weatherInfo(d.weather_code[i]))}</td>`
+      + `<td class="num">${Math.round(d.temperature_2m_max[i])}° / ${Math.round(d.temperature_2m_min[i])}°</td>`
+      + `<td class="num">${regen}</td>`
+      + `<td class="num">${Math.round(d.wind_speed_10m_max[i])} km/h ${L.windFrom} ${dirShort(d.wind_direction_10m_dominant[i])}</td>`
+      + `<td class="num">${sun}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+function renderForecast(j) {
+  const cur = j.current;
+  $('fc-now').textContent = fcNowSentence(cur);
+  $('fc-meta').textContent = `${L.metaForecast} ${cur.time.slice(11, 16)} · ${state.label} · ${fmt3(state.lat)} / ${fmt3(state.lon)} · Open-Meteo`;
+  renderHourly(j.hourly, cur.time);
+  renderDaily(j.daily);
+}
+
+const locKey = () => `${state.lat.toFixed(4)},${state.lon.toFixed(4)}`;
+
+async function updateForecast() {
+  setError('');
+  $('fc-now').textContent = L.fcLoading;
+  try {
+    const j = await fetchForecast(state.lat, state.lon);
+    renderForecast(j);
+    forecast = { key: locKey(), ts: Date.now() };
+  } catch (e) {
+    $('fc-now').textContent = L.fcFail;
+    setError(L.checkConn.trim());
+  }
+}
+
+// Vorhersage nur laden, wenn sie fehlt, der Ort wechselte oder sie älter als 10 min ist.
+function ensureForecast() {
+  if (forecast.key !== locKey() || Date.now() - forecast.ts > 10 * 60000) updateForecast();
+}
+
 async function update() {
   setError('');
   setStatus(L.updating);
@@ -703,14 +1043,82 @@ async function update() {
   }
 }
 
-$('btn-update').addEventListener('click', update);
+function hideResults() {
+  const box = $('results');
+  box.hidden = true;
+  $('results-list').innerHTML = '';
+  $('results-head').textContent = '';
+}
 
-$('btn-suche').addEventListener('click', async () => {
+// Nach einem Standortwechsel: Radar neu laden, Vorhersage-Cache verwerfen und
+// – falls der Vorhersage-Tab offen ist – auch die Vorhersage aktualisieren.
+function locationChanged() {
+  forecast.key = null;
+  update();
+  if (activeTab === 'tab-forecast') updateForecast();
+}
+
+// Einen Kandidaten übernehmen: Standort setzen, Liste schließen, Daten laden.
+function selectPlace(place) {
+  hideResults();
+  state = { lat: place.lat, lon: place.lon, label: place.label };
+  $('ort').value = place.label;
+  locationChanged();
+}
+
+// Mehrere Treffer als auswählbare Liste anbieten (Listensemantik nennt „x von n").
+function renderResults(feats, query) {
+  const list = $('results-list');
+  list.innerHTML = '';
+  feats.forEach((f) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'result';
+    const m = document.createElement('span');
+    m.className = 'result-main';
+    m.textContent = f.main;
+    b.appendChild(m);
+    if (f.context) {
+      const c = document.createElement('span');
+      c.className = 'result-ctx';
+      c.textContent = f.context;
+      b.appendChild(c);
+    }
+    b.addEventListener('click', () => selectPlace(f));
+    li.appendChild(b);
+    list.appendChild(li);
+  });
+  $('results-head').textContent = L.resultsHead(feats.length, query);
+  $('results').hidden = false;
+  setStatus(L.multiStatus(feats.length));
+  const first = list.querySelector('button');
+  if (first) first.focus();
+}
+
+async function searchLocation(name) {
+  setError('');
+  hideResults();
+  setStatus(L.searching(name));
+  let feats;
+  try {
+    feats = await geocode(name);
+  } catch (e) {
+    setStatus(L.searchFail);
+    setError(L.checkConn.trim());
+    return;
+  }
+  if (!feats.length) { setStatus(L.noLocation(name)); return; }
+  if (feats.length === 1) { selectPlace(feats[0]); return; }
+  renderResults(feats, name);
+}
+
+$('btn-update').addEventListener('click', locationChanged);
+
+$('btn-suche').addEventListener('click', () => {
   const name = $('ort').value.trim();
-  if (!name) { setError(L.enterLocation); return; }
-  setError(''); setStatus(L.searching(name));
-  try { const g = await geocode(name); state = g; $('ort').value = g.label; await update(); }
-  catch (e) { setStatus(L.notFound); setError(e.message); }
+  if (!name) { hideResults(); setError(L.enterLocation); return; }
+  searchLocation(name);
 });
 
 $('btn-geo').addEventListener('click', () => {
@@ -724,12 +1132,18 @@ $('btn-geo').addEventListener('click', () => {
     setError(L.geoInsecure);
     return;
   }
+  hideResults();
   setError(''); setStatus(L.geoDetermining);
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
-      state = { lat: pos.coords.latitude, lon: pos.coords.longitude, label: L.myLocation };
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      state = { lat, lon, label: L.myLocation };
       $('ort').value = L.myLocation;
-      await update();
+      try {
+        const label = await reverseGeocode(lat, lon);
+        if (label) { state.label = label; $('ort').value = label; }
+      } catch (_) { /* Label ist nur Komfort – Radar funktioniert auch ohne */ }
+      locationChanged();
     },
     (err) => {
       const msg = err.code === 1 ? L.geoDenied
@@ -747,6 +1161,33 @@ $('auto').addEventListener('change', (e) => {
 });
 
 $('ort').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('btn-suche').click(); } });
+
+/* ---- Tabs (WAI-ARIA Tab-Pattern) ---------------------------------------- */
+const TABS = [$('tab-radar'), $('tab-forecast')];
+
+function selectTab(id, focus) {
+  activeTab = id;
+  TABS.forEach((t) => {
+    const sel = t.id === id;
+    t.setAttribute('aria-selected', sel ? 'true' : 'false');
+    t.tabIndex = sel ? 0 : -1;
+    $(t.getAttribute('aria-controls')).hidden = !sel;
+  });
+  if (focus) $(id).focus();
+  if (id === 'tab-forecast') ensureForecast();
+}
+
+TABS.forEach((tab, i) => {
+  tab.addEventListener('click', () => selectTab(tab.id, false));
+  tab.addEventListener('keydown', (e) => {
+    let ni = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') ni = (i + 1) % TABS.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ni = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') ni = 0;
+    else if (e.key === 'End') ni = TABS.length - 1;
+    if (ni != null) { e.preventDefault(); selectTab(TABS[ni].id, true); }
+  });
+});
 
 applyStaticI18n();
 update();
