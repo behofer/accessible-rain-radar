@@ -378,6 +378,62 @@ function wmoIcon(c) {
   return '•';
 }
 
+// Repräsentativen Tages-Wettercode aus den Stundenwerten ableiten.
+// Open-Meteos daily weather_code nennt den "schwersten" Code des Tages – so
+// wird z. B. aus zwei Stunden Morgennebel ein ganzer "Nebel"-Tag. Stattdessen:
+// Gewitter und Niederschlag zählen ganztägig, Nebel nur, wenn er die Mehrheit
+// der Tagstunden prägt; sonst beschreibt die mittlere Bewölkung den Tag.
+// Liefert null, wenn keine Stundendaten zum Datum vorliegen (Aufrufer nutzt
+// dann den API-Tageswert als Fallback).
+function dailyWeatherCode(hourly, dateStr, sunrise, sunset) {
+  const idx = [];
+  for (let i = 0; i < hourly.time.length; i++)
+    if (hourly.time[i].startsWith(dateStr)) idx.push(i);
+  const codes = idx.map((i) => hourly.weather_code[i]).filter(Number.isFinite);
+  if (!codes.length) return null;
+
+  // Häufigster Code; bei Gleichstand gewinnt der stärkere (höhere WMO-Code).
+  const mode = (arr) => {
+    const n = new Map();
+    arr.forEach((c) => n.set(c, (n.get(c) || 0) + 1));
+    return [...n.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+  };
+
+  // 1) Gewitter dominiert den Tag immer.
+  const thunder = codes.filter((c) => c >= 95);
+  if (thunder.length) return mode(thunder);
+
+  // 2) Niederschlag ab 2 Stunden – oder schon ab 1 Stunde, wenn er kräftig
+  //    oder gefrierend ist (dann ist eine einzelne Stunde relevant genug).
+  const severe = [55, 56, 57, 65, 66, 67, 75, 82, 86];
+  const precip = codes.filter((c) => (c >= 51 && c <= 67) || (c >= 71 && c <= 77) || (c >= 80 && c <= 86));
+  if (precip.length >= 2 || precip.some((c) => severe.includes(c))) return mode(precip);
+
+  // Tagstunden (Sonnenauf- bis -untergang) für Nebel und Bewölkung – nachts
+  // interessiert beides kaum. Fallback: alle Stunden des Tages.
+  let day = idx;
+  if (sunrise && sunset) {
+    const from = sunrise.slice(0, 13), to = sunset.slice(0, 13);
+    const d = idx.filter((i) => { const h = hourly.time[i].slice(0, 13); return h >= from && h <= to; });
+    if (d.length) day = d;
+  }
+  const dayCodes = day.map((i) => hourly.weather_code[i]).filter(Number.isFinite);
+
+  // 3) Nebel nur, wenn mindestens die Hälfte der Tagstunden neblig ist.
+  const fog = dayCodes.filter((c) => c === 45 || c === 48);
+  if (fog.length && fog.length * 2 >= dayCodes.length) return mode(fog);
+
+  // 4) Sonst beschreibt die mittlere Bewölkung tagsüber den Tag:
+  //    klar / überwiegend klar / teils bewölkt / bedeckt.
+  const cover = day.map((i) => (hourly.cloud_cover || [])[i]).filter(Number.isFinite);
+  if (cover.length) {
+    const cc = cover.reduce((a, b) => a + b, 0) / cover.length;
+    return cc < 15 ? 0 : cc < 40 ? 1 : cc < 75 ? 2 : 3;
+  }
+  const cloud = dayCodes.filter((c) => c <= 3);
+  return cloud.length ? mode(cloud) : mode(codes);
+}
+
 function classify(mmPerH, levels = LEVELS_DE) {
   let lvl;
   if (mmPerH < 0.1) lvl = 0;
@@ -788,7 +844,7 @@ function analyzeRadar(json, nowMs, opts = {}) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { analyzeRadar, classify, BEARINGS, RADAR_TH, V2MMH, I18N };
+  module.exports = { analyzeRadar, classify, dailyWeatherCode, BEARINGS, RADAR_TH, V2MMH, I18N };
 }
 
 /* ============================================================
@@ -1088,7 +1144,7 @@ function dayLabel(dateStr, i) {
   return wd.charAt(0).toUpperCase() + wd.slice(1);
 }
 
-function renderDaily(d) {
+function renderDaily(d, dayCodes) {
   const tb = $('fc-daily'); tb.innerHTML = '';
   for (let i = 0; i < d.time.length; i++) {
     const tr = document.createElement('tr');
@@ -1096,7 +1152,7 @@ function renderDaily(d) {
     const regen = (sum > 0 ? `${fmt1(sum)} mm · ` : '') + `${prob == null ? 0 : prob} %`;
     const sun = `${d.sunrise[i].slice(11, 16)}–${d.sunset[i].slice(11, 16)}`;
     tr.innerHTML = `<th scope="row">${dayLabel(d.time[i], i)}</th>`
-      + `<td>${wxTag(weatherInfo(d.weather_code[i]))}</td>`
+      + `<td>${wxTag(weatherInfo(dayCodes[i]))}</td>`
       + `<td class="num">${Math.round(d.temperature_2m_max[i])}° / ${Math.round(d.temperature_2m_min[i])}°</td>`
       + `<td class="num">${regen}</td>`
       + `<td class="num">${Math.round(d.wind_speed_10m_max[i])} km/h ${L.windFrom} ${dirShort(d.wind_direction_10m_dominant[i])}</td>`
@@ -1127,13 +1183,13 @@ function renderHourlyList(h, curTime) {
   }
 }
 
-function renderDailyList(d) {
+function renderDailyList(d, dayCodes) {
   const ul = $('fc-daily-list'); ul.innerHTML = '';
   for (let i = 0; i < d.time.length; i++) {
     const li = document.createElement('li');
     const prob = d.precipitation_probability_max[i], sum = d.precipitation_sum[i];
     const rain = `${prob == null ? 0 : prob} % ${L.fcProb}` + (sum > 0 ? `, ${fmt1(sum)} mm` : '');
-    li.textContent = `${dayLabel(d.time[i], i)}: ${weatherInfo(d.weather_code[i]).text}, `
+    li.textContent = `${dayLabel(d.time[i], i)}: ${weatherInfo(dayCodes[i]).text}, `
       + `${Math.round(d.temperature_2m_max[i])}° / ${Math.round(d.temperature_2m_min[i])}°, ${rain}, `
       + `${L.fhWind} ${Math.round(d.wind_speed_10m_max[i])} km/h ${L.windFrom} ${dirShort(d.wind_direction_10m_dominant[i])}, `
       + `${L.fdSonne} ${d.sunrise[i].slice(11, 16)}–${d.sunset[i].slice(11, 16)}`;
@@ -1147,8 +1203,14 @@ function renderForecast(j) {
   $('fc-meta').textContent = `${L.metaForecast} ${cur.time.slice(11, 16)} · ${state.label} · ${fmt3(state.lat)} / ${fmt3(state.lon)} · Open-Meteo`;
   renderHourly(j.hourly, cur.time);
   renderHourlyList(j.hourly, cur.time);
-  renderDaily(j.daily);
-  renderDailyList(j.daily);
+  // Tages-Wettercode aus den Stundenwerten ableiten statt Open-Meteos
+  // "schwerster Code des Tages" (der z. B. Morgennebel überbewertet).
+  const dayCodes = j.daily.time.map((t, i) => {
+    const c = dailyWeatherCode(j.hourly, t, j.daily.sunrise[i], j.daily.sunset[i]);
+    return c == null ? j.daily.weather_code[i] : c;
+  });
+  renderDaily(j.daily, dayCodes);
+  renderDailyList(j.daily, dayCodes);
 }
 
 const locKey = () => `${state.lat.toFixed(4)},${state.lon.toFixed(4)}`;
