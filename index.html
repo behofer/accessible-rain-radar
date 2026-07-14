@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Regen-Radar – barrierefrei (DWD) mit Wettervorhersage</title>
-<meta name="description" content="Barrierefreies DWD-Regenradar mit Wettervorhersage: Niederschlag als Klartext, Zeitverlauf und Himmelsrichtung, dazu stündliche und 5-Tage-Vorhersage. Optimiert für Screenreader, ohne Tracking, ohne Anmeldung.">
+<meta name="description" content="Barrierefreies DWD-Regenradar mit Wettervorhersage und Gewitterwarnungen: Niederschlag als Klartext, Zeitverlauf und Himmelsrichtung, dazu amtliche DWD-Gewitterwarnungen sowie stündliche und 5-Tage-Vorhersage. Optimiert für Screenreader, ohne Tracking, ohne Anmeldung.">
 <meta name="author" content="Benjamin Hofer">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
@@ -12,7 +12,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://regenradar.bhofer.de/">
 <meta property="og:title" content="Regen-Radar – barrierefrei mit Wettervorhersage">
-<meta property="og:description" content="Barrierefreies DWD-Regenradar mit Wettervorhersage – als Klartext, Tabelle und einfache Liste. Für Screenreader optimiert, ohne Tracking.">
+<meta property="og:description" content="Barrierefreies DWD-Regenradar mit Wettervorhersage und amtlichen Gewitterwarnungen – als Klartext, Tabelle und einfache Liste. Für Screenreader optimiert, ohne Tracking.">
 <meta property="og:locale" content="de_DE">
 <meta property="og:locale:alternate" content="en_GB">
 <meta name="twitter:card" content="summary">
@@ -23,7 +23,7 @@
   "@type": "WebApplication",
   "name": "Accessible Rain Radar",
   "url": "https://regenradar.bhofer.de/",
-  "description": "Accessible DWD rain radar with weather forecast – plain text, table and simple list views, optimized for screen readers.",
+  "description": "Accessible DWD rain radar with weather forecast and official DWD thunderstorm warnings – plain text, table and simple list views, optimized for screen readers.",
   "applicationCategory": "Weather",
   "operatingSystem": "Any (web browser)",
   "inLanguage": ["de", "en"],
@@ -40,6 +40,7 @@
     --line: #d4dae3; --accent: #1f6feb; --accent-soft: #e3edfd;
     --focus: #1f6feb; --shadow: 0 1px 2px rgba(20,24,31,.06), 0 4px 16px rgba(20,24,31,.05);
     --r1: #cfe0c0; --r2: #8ec3ec; --r3: #3a8fd6; --r4: #2056a8; --r5: #6a3fb0;
+    --warn: #9a5b00; --warn-soft: #fdf1dc;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -47,9 +48,11 @@
       --line: #283040; --accent: #4d96ff; --accent-soft: #16263f;
       --focus: #7db4ff; --shadow: none;
       --r1: #46603a; --r2: #2f5f86; --r3: #2f78c0; --r4: #3a6fd0; --r5: #8a63d8;
+      --warn: #f2b13e; --warn-soft: #2a2110;
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font: 16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
@@ -138,6 +141,15 @@
   .compass .hub.rain { fill: var(--accent); }
   .compass .arrow { stroke: var(--accent); stroke-width: 2.5; fill: var(--accent); }
 
+  #sec-storm.active { border-left: 5px solid var(--warn); }
+  .storm-sentence { margin: 0; font-weight: 600; }
+  .warnbox { margin: 12px 0 0; padding: 12px 14px; border: 1px solid var(--warn); border-left-width: 5px; border-radius: 10px; background: var(--warn-soft); }
+  .warnbox p { margin: 0 0 6px; }
+  .warnbox p:last-child { margin-bottom: 0; }
+  .warnbox .warn-meta { color: var(--muted); font-size: .85rem; }
+  .warnbox details { margin: 4px 0 0; }
+  .warnbox summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+
   .err { color: #c0392b; font-weight: 600; }
   @media (prefers-color-scheme: dark) { .err { color: #ff8b7a; } }
   footer { color: var(--muted); font-size: .82rem; margin-top: 8px; }
@@ -196,6 +208,12 @@
       <p class="label" id="h-klar">Klartext</p>
       <p class="sentence" id="klartext" role="status" aria-live="polite" aria-atomic="true">Lade Radardaten …</p>
       <p class="meta" id="meta" aria-hidden="true"></p>
+    </section>
+
+    <section class="panel" id="sec-storm" aria-labelledby="h-storm">
+      <h2 id="h-storm">Gewitter</h2>
+      <p class="storm-sentence" id="storm-text" role="status" aria-live="polite" aria-atomic="true">…</p>
+      <div id="storm-warnings"></div>
     </section>
 
     <section class="panel" aria-labelledby="h-hier">
@@ -572,6 +590,24 @@ const I18N = {
     hUm: 'In der Umgebung',
     capUm: 'Aktuelle Radar-Echos je Himmelsrichtung, bis 50 km Entfernung.',
     thRichtung: 'Richtung', thEntf: 'Ab Entfernung',
+    // Gewitter
+    hStorm: 'Gewitter',
+    stormLoading: 'Prüfe Gewitterlage …',
+    stormNone: 'Keine Gewitter in Sicht – keine amtliche Warnung, keine Gewitter in der 24-Stunden-Vorhersage.',
+    stormFail: 'Gewitter-Informationen konnten nicht geladen werden.',
+    stormWarnLine: (evt, validity) => `Amtliche Warnung: ${evt}${validity ? ` – ${validity}` : ''}.`,
+    stormOutlook: (txt) => `Gewitter laut Vorhersage möglich: ${txt}.`,
+    stormAt: (day, h) => `${day} gegen ${h} Uhr`,
+    stormBetween: (day, h1, h2) => `${day} zwischen ${h1} und ${h2} Uhr`,
+    stormHail: ', teils mit Hagel',
+    validUntil: (when) => `gültig bis ${when}`,
+    validFrom: (when) => `ab ${when}`,
+    severityNames: { minor: 'Wetterwarnung', moderate: 'Markante Wetterwarnung', severe: 'Unwetterwarnung', extreme: 'Extreme Unwetterwarnung' },
+    severityFallback: 'Amtliche Warnung',
+    detailsLabel: 'Details und Verhaltenshinweise',
+    dayToday: 'heute', dayTomorrow: 'morgen',
+    dayOn: (wd) => `am ${wd}`,
+    timeSuffix: ' Uhr',
     // Wettervorhersage
     wmo: WMO_DE, windFrom: 'aus',
     fcNowLabel: 'Jetzt',
@@ -599,7 +635,7 @@ const I18N = {
     footerForecastVia: '. ',
     footerGeoLbl: 'Ortssuche: ',
     footerGeoVia: ' (OpenStreetMap). ',
-    footerDisclaimer: 'Radar und Vorhersage sind Schätzungen, keine amtlichen Wetterwarnungen.',
+    footerDisclaimer: 'Radar und Vorhersage sind Schätzungen. Gewitterwarnungen sind amtliche Warnungen des DWD (via Bright Sky).',
     copyright: '© 2026 Benjamin Hofer · Frei und quelloffen (GPLv3) · barrierefrei, ohne Tracking, ohne Anmeldung.',
     sourceLink: 'Quellcode auf GitHub',
     noHistory: 'Keine Verlaufsdaten.',
@@ -655,6 +691,24 @@ const I18N = {
     hUm: 'In the area',
     capUm: 'Current radar echoes per compass direction, up to 50 km away.',
     thRichtung: 'Direction', thEntf: 'From distance',
+    // Thunderstorms
+    hStorm: 'Thunderstorms',
+    stormLoading: 'Checking for thunderstorms …',
+    stormNone: 'No thunderstorms in sight – no official warning, no thunderstorms in the 24-hour forecast.',
+    stormFail: 'Thunderstorm information could not be loaded.',
+    stormWarnLine: (evt, validity) => `Official warning: ${evt}${validity ? ` – ${validity}` : ''}.`,
+    stormOutlook: (txt) => `Thunderstorms possible according to the forecast: ${txt}.`,
+    stormAt: (day, h) => `${day} around ${h}:00`,
+    stormBetween: (day, h1, h2) => `${day} between ${h1}:00 and ${h2}:00`,
+    stormHail: ', possibly with hail',
+    validUntil: (when) => `valid until ${when}`,
+    validFrom: (when) => `from ${when}`,
+    severityNames: { minor: 'Weather warning', moderate: 'Significant weather warning', severe: 'Severe weather warning', extreme: 'Extreme weather warning' },
+    severityFallback: 'Official warning',
+    detailsLabel: 'Details and safety advice',
+    dayToday: 'today', dayTomorrow: 'tomorrow',
+    dayOn: (wd) => `on ${wd}`,
+    timeSuffix: '',
     // Weather forecast
     wmo: WMO_EN, windFrom: 'from',
     fcNowLabel: 'Now',
@@ -682,7 +736,7 @@ const I18N = {
     footerForecastVia: '. ',
     footerGeoLbl: 'Location search: ',
     footerGeoVia: ' (OpenStreetMap). ',
-    footerDisclaimer: 'Radar and forecast are estimates, not official weather warnings.',
+    footerDisclaimer: 'Radar and forecast are estimates. Thunderstorm warnings are official DWD warnings (via Bright Sky).',
     copyright: '© 2026 Benjamin Hofer · Free and open source (GPLv3) · accessible, no tracking, no sign-up.',
     sourceLink: 'Source on GitHub',
     noHistory: 'No history data.',
@@ -787,8 +841,31 @@ function analyzeRadar(json, nowMs, opts = {}) {
   };
 }
 
+// Gewitter-Zeitfenster aus Open-Meteo-Stundendaten: zusammenhängende Stunden
+// mit WMO-Code >= 95 (Gewitter / mit Hagel) innerhalb der nächsten `hoursAhead` Stunden.
+function stormWindows(hourly, curTime, hoursAhead = 24) {
+  const t = (hourly && hourly.time) || [], codes = (hourly && hourly.weather_code) || [];
+  let start = t.findIndex((x) => x >= curTime);
+  if (start === -1) return [];
+  if (start > 0 && t[start] > curTime) start -= 1;
+  const end = Math.min(start + hoursAhead, t.length);
+  const win = [];
+  for (let i = start; i < end; i++) {
+    if (!(codes[i] >= 95)) continue;
+    const last = win[win.length - 1];
+    if (last && last.endIdx === i - 1) { last.endIdx = i; last.end = t[i]; last.maxCode = Math.max(last.maxCode, codes[i]); }
+    else win.push({ startIdx: i, endIdx: i, start: t[i], end: t[i], maxCode: codes[i] });
+  }
+  return win;
+}
+
+// Amtliche DWD-Warnung (Bright Sky /alerts), die Gewitter betrifft?
+function isStormAlert(a) {
+  return /gewitter|thunderstorm/i.test([a.event_de, a.event_en, a.headline_de, a.headline_en].filter(Boolean).join(' '));
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { analyzeRadar, classify, BEARINGS, RADAR_TH, V2MMH, I18N };
+  module.exports = { analyzeRadar, classify, BEARINGS, RADAR_TH, V2MMH, I18N, stormWindows, isStormAlert };
 }
 
 /* ============================================================
@@ -819,6 +896,9 @@ let activeTab = 'tab-radar';
 let fcView = 'hourly'; // 'hourly' | 'daily' – Umschalter im Vorhersage-Tab
 let dispMode = 'table'; // 'table' | 'list' – Darstellung der Vorhersage
 let forecast = { key: null, ts: 0 }; // Cache-Schlüssel + Zeitstempel der geladenen Vorhersage
+let fcJson = null;        // zuletzt geladene Open-Meteo-Antwort (füttert auch den Gewitter-Abschnitt)
+let fcPromise = null;     // laufender Vorhersage-Abruf (verhindert Doppel-Requests)
+let fcRenderedKey = null; // Ort, für den der Vorhersage-Tab zuletzt gerendert wurde
 
 // Im Browser gemerkte Einstellungen (localStorage; scheitert still in privaten Modi).
 const LS = { loc: 'rr.loc', disp: 'rr.disp' };
@@ -873,6 +953,8 @@ function applyStaticI18n() {
   set('th-richtung', L.thRichtung);
   set('th-nieder2', L.thNieder);
   set('th-entf', L.thEntf);
+  set('h-storm', L.hStorm);
+  set('storm-text', L.stormLoading);
   // Wettervorhersage-Tab
   set('h-fc-now', L.fcNowLabel);
   set('fc-now', L.fcLoading);
@@ -955,6 +1037,13 @@ async function reverseGeocode(lat, lon) {
   const j = await r.json();
   const f = (j.features || [])[0];
   return f ? labelFromProps(f.properties).label : null;
+}
+
+// Amtliche DWD-Warnungen für den Standort (gleicher Anbieter wie das Radar).
+async function fetchAlerts(lat, lon) {
+  const r = await fetch(`https://api.brightsky.dev/alerts?lat=${lat}&lon=${lon}`);
+  if (!r.ok) throw new Error(L.stormFail);
+  return r.json();
 }
 
 async function fetchRadar(lat, lon) {
@@ -1153,27 +1242,155 @@ function renderForecast(j) {
 
 const locKey = () => `${state.lat.toFixed(4)},${state.lon.toFixed(4)}`;
 
+// Vorhersage-Daten holen bzw. aus dem Cache liefern (Ort gewechselt / älter als 10 min -> neu).
+// Wird vom Vorhersage-Tab UND vom Gewitter-Abschnitt genutzt.
+function ensureForecastData() {
+  if (fcJson && forecast.key === locKey() && Date.now() - forecast.ts <= 10 * 60000) return Promise.resolve(fcJson);
+  if (!fcPromise) {
+    const key = locKey();
+    fcPromise = fetchForecast(state.lat, state.lon)
+      .then((j) => { fcJson = j; forecast = { key, ts: Date.now() }; fcPromise = null; return j; })
+      .catch((e) => { fcPromise = null; throw e; });
+  }
+  return fcPromise;
+}
+
 async function updateForecast() {
   setError('');
   $('fc-now').textContent = L.fcLoading;
   try {
-    const j = await fetchForecast(state.lat, state.lon);
-    renderForecast(j);
-    forecast = { key: locKey(), ts: Date.now() };
+    renderForecast(await ensureForecastData());
+    fcRenderedKey = forecast.key;
   } catch (e) {
     $('fc-now').textContent = L.fcFail;
     setError(L.checkConn.trim());
   }
 }
 
-// Vorhersage nur laden, wenn sie fehlt, der Ort wechselte oder sie älter als 10 min ist.
+// Vorhersage-Tab nur neu aufbauen, wenn er fehlt, der Ort wechselte oder die Daten alt sind.
 function ensureForecast() {
-  if (forecast.key !== locKey() || Date.now() - forecast.ts > 10 * 60000) updateForecast();
+  if (fcRenderedKey !== locKey() || forecast.key !== locKey() || Date.now() - forecast.ts > 10 * 60000) updateForecast();
+}
+
+/* ---- Gewitter (DWD-Warnungen via Bright Sky + Open-Meteo-Ausblick) ------- */
+
+// "gültig bis heute, 19:30 Uhr" – Zeitpunkt einer Warnung lesbar machen.
+function fmtWhen(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const time = d.toLocaleTimeString(L.locale, { hour: '2-digit', minute: '2-digit' }) + L.timeSuffix;
+  if (d.toDateString() === now.toDateString()) return `${L.dayToday}, ${time}`;
+  const tom = new Date(now); tom.setDate(now.getDate() + 1);
+  if (d.toDateString() === tom.toDateString()) return `${L.dayTomorrow}, ${time}`;
+  return `${L.dayOn(d.toLocaleDateString(L.locale, { weekday: 'long' }))}, ${time}`;
+}
+
+function alertValidity(a, nowMs) {
+  if (a.onset && Date.parse(a.onset) > nowMs) return L.validFrom(fmtWhen(a.onset));
+  if (a.expires) return L.validUntil(fmtWhen(a.expires));
+  return '';
+}
+
+// Ereignisname der Warnung: DWD liefert Deutsch in GROSSBUCHSTABEN -> "Starkes Gewitter".
+function stormEventName(a) {
+  const raw = (LANG === 'de' ? a.event_de : a.event_en) || a.event_en || a.event_de || '';
+  const s = raw.toLowerCase();
+  return LANG === 'de' ? s.replace(/(^|[\s-])\S/g, (c) => c.toUpperCase()) : s;
+}
+
+// "heute" / "morgen" / "am Mittwoch" für den Vorhersage-Ausblick (Open-Meteo-Ortszeit).
+function dayInline(dateStr, curDate) {
+  if (dateStr === curDate) return L.dayToday;
+  const d = new Date(curDate + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, '0');
+  if (dateStr === `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`) return L.dayTomorrow;
+  return L.dayOn(new Date(dateStr + 'T12:00:00').toLocaleDateString(L.locale, { weekday: 'long' }));
+}
+
+// Gewitterstunden der nächsten 24 h als Satzteil, z. B. "heute zwischen 17 und 20 Uhr, teils mit Hagel".
+function stormOutlookText(fc) {
+  const wins = stormWindows(fc.hourly, fc.current.time, 24);
+  if (!wins.length) return null;
+  const curDate = fc.current.time.slice(0, 10);
+  const parts = wins.slice(0, 2).map((w) => {
+    const day = dayInline(w.start.slice(0, 10), curDate);
+    const h1 = parseInt(w.start.slice(11, 13), 10);
+    const h2 = (parseInt(w.end.slice(11, 13), 10) + 1) % 24;
+    const base = w.startIdx === w.endIdx ? L.stormAt(day, h1) : L.stormBetween(day, h1, h2);
+    return base + (w.maxCode >= 96 ? L.stormHail : '');
+  });
+  return L.stormOutlook(parts.join('; '));
+}
+
+// alerts: Array amtlicher Warnungen, null = Abruf fehlgeschlagen. fc: Open-Meteo-JSON oder null.
+function renderStorm(alerts, fc) {
+  const el = $('storm-text'), box = $('storm-warnings');
+  box.innerHTML = '';
+  const nowMs = Date.now();
+  const rank = { extreme: 3, severe: 2, moderate: 1, minor: 0 };
+  const storm = alerts
+    ? alerts.filter((a) => isStormAlert(a) && (!a.expires || Date.parse(a.expires) > nowMs))
+        .sort((a, b) => (rank[b.severity] || 0) - (rank[a.severity] || 0))
+    : null;
+  const outlook = fc && fc.hourly && fc.current ? stormOutlookText(fc) : null;
+
+  const parts = [];
+  if (storm && storm.length) parts.push(L.stormWarnLine(stormEventName(storm[0]), alertValidity(storm[0], nowMs)));
+  if (outlook) parts.push(outlook);
+  el.textContent = parts.length ? parts.join(' ') : (!alerts && !fc ? L.stormFail : L.stormNone);
+  $('sec-storm').classList.toggle('active', !!(storm && storm.length));
+
+  (storm || []).slice(0, 3).forEach((a) => {
+    const d = document.createElement('div');
+    d.className = 'warnbox';
+    const head = document.createElement('p');
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '⚠️ ';
+    const strong = document.createElement('strong');
+    strong.textContent = (LANG === 'de' ? a.headline_de : a.headline_en) || a.headline_de || stormEventName(a);
+    head.append(icon, strong);
+    const meta = document.createElement('p');
+    meta.className = 'warn-meta';
+    meta.textContent = [(L.severityNames[a.severity] || L.severityFallback) + ' (DWD)', alertValidity(a, nowMs)].filter(Boolean).join(' · ');
+    d.append(head, meta);
+    const desc = (LANG === 'de' ? a.description_de : a.description_en) || '';
+    const instr = (LANG === 'de' ? a.instruction_de : a.instruction_en) || '';
+    if (desc || instr) {
+      const det = document.createElement('details');
+      const sum = document.createElement('summary');
+      sum.textContent = L.detailsLabel;
+      det.appendChild(sum);
+      for (const txt of [desc, instr]) {
+        if (!txt) continue;
+        const p = document.createElement('p');
+        p.textContent = txt;
+        det.appendChild(p);
+      }
+      d.appendChild(det);
+    }
+    box.appendChild(d);
+  });
+}
+
+async function updateStorm() {
+  $('storm-text').textContent = L.stormLoading;
+  $('storm-warnings').innerHTML = '';
+  const key = locKey();
+  const [alerts, fc] = await Promise.all([
+    fetchAlerts(state.lat, state.lon).then((j) => j.alerts || []).catch(() => null),
+    ensureForecastData().catch(() => null),
+  ]);
+  if (key !== locKey()) return; // Ort wurde inzwischen gewechselt
+  renderStorm(alerts, fc);
 }
 
 async function update() {
   setError('');
   setStatus(L.updating);
+  updateStorm(); // parallel: Gewitterlage (amtliche Warnungen + Vorhersage-Ausblick)
   try {
     const json = await fetchRadar(state.lat, state.lon);
     const res = analyzeRadar(json, Date.now(), { maxKm: DIST_M / 1000, L });
@@ -1199,6 +1416,7 @@ function hideResults() {
 // – falls der Vorhersage-Tab offen ist – auch die Vorhersage aktualisieren.
 function locationChanged() {
   forecast.key = null;
+  fcJson = null;
   saveState();
   update();
   if (activeTab === 'tab-forecast') updateForecast();
