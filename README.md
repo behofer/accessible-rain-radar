@@ -1,6 +1,6 @@
 # Accessible Rain Radar
 
-A 100% screen-reader-accessible rain radar (rain nowcast) **with weather forecast** for Germany, built as a **single, dependency-free HTML file**. It turns the DWD radar composite into **plain language**, a **timeline** and a **compass view** — no map image required, fully usable with a screen reader and keyboard — and adds an hourly and 7-day **weather forecast** for the same location.
+A 100% screen-reader-accessible rain radar (rain nowcast) **with weather forecast** for Germany, built as a **single, dependency-free HTML file**. It turns the DWD radar composite into **plain language**, a **timeline** and a **compass view** — no map image required, fully usable with a screen reader and keyboard — and adds an hourly and 5-day **weather forecast** plus official **DWD thunderstorm warnings** for the same location.
 
 The interface language is detected automatically from the browser: **English** for `en-*` locales, **German** for everything else.
 
@@ -14,6 +14,7 @@ The interface language is detected automatically from the browser: **English** f
   _"Currently dry. Moderate rain is moving in from the west (15 km to the west) at around 15 km/h – expected here in about 70 minutes."_
 - **Timeline table** — precipitation at your location in 10-minute steps, 2 hours ahead.
 - **Surroundings table + compass** — radar echoes per compass direction up to 50 km, with an estimated direction of movement.
+- **Thunderstorm (Gewitter) panel** — official **DWD thunderstorm warnings** for the location (Bright Sky `/alerts`) with severity, validity and expandable safety advice, plus a plain-language **outlook** of thunderstorm hours in the next 24 h from the Open-Meteo forecast (WMO codes 95/96/99), e.g. _"Official warning: Severe thunderstorm – valid until today, 19:30. Thunderstorms possible according to the forecast: today between 17:00 and 20:00, possibly with hail."_ No additional data providers needed.
 - **Weather forecast tab** — for the selected location: a "now" summary plus an **hourly (24 h)** and **5-day** view with weather, temperature, rain, wind and cloud cover. Switch between _Rain radar_ and _Weather forecast_ with an accessible tab widget (arrow-key navigable), and toggle **hourly / 5-day**.
 - **Table or list view** — the forecast can be shown as a table or as a **plain list** (e.g. _"14:00: partly cloudy, 23 °C, 90 % chance of rain, wind 12 km/h from W, 40 % cloud"_), which many screen-reader users find easier to scan. Both toggles are WAI-ARIA radio groups.
 - **Remembers your choices** — the last location and the table/list preference are stored locally in the browser (`localStorage`), so you don't have to re-enter them.
@@ -27,6 +28,8 @@ The interface language is detected automatically from the browser: **English** f
 [Bright Sky](https://brightsky.dev) serves the **DWD RV radar composite**: 1 km² grid, 5-minute steps, 2-hour forecast. Coverage is **Germany and bordering regions**. Radar is an estimate of near-surface precipitation, not an exact measurement.
 
 The weather forecast (hourly and daily) uses the [Open-Meteo](https://open-meteo.com) API.
+
+Thunderstorm information combines two sources that are already in use: official DWD weather alerts from the Bright Sky **`/alerts`** endpoint (filtered to thunderstorm events, most severe first) and thunderstorm hours (WMO weather codes 95/96/99) from the Open-Meteo hourly forecast. The radar composite itself only sees precipitation — it cannot distinguish a thunderstorm from plain rain, which is why the warnings and the forecast codes fill that gap.
 
 Geocoding (place/address → coordinates, and reverse) uses [Photon](https://photon.komoot.io) (OpenStreetMap data).
 
